@@ -4,10 +4,10 @@ channels:
   - conda-forge
   - defaults
 dependencies:
-  - omegaconf=2.2.3
-  - python=3.9
+  - omegaconf=2.3.0
+  - python=3.11
   - pytorch
-  - cudatoolkit=11.3
-  - pytorch-lightning=1.7.7
-  - torchvision=0.13.1
-  - wandb=0.13.4
+  - cudatoolkit=12.3
+  - pytorch-lightning=2.2.0
+  - torchvision=0.17.1
+  - wandb=0.16.3

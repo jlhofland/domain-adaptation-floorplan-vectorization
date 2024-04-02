@@ -1,0 +1,5 @@
+omegaconf==2.3.0
+torch==2.2.1+cu121
+pytorch-lightning==2.2.0
+torchvision==0.17.1
+wandb==0.16.3

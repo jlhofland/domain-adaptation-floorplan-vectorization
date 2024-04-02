@@ -1,18 +1,50 @@
 seed: 0
-optimize:
-  optimizer: Adam
-  lr: 0.001
-train:
-  epochs: 100
-  batch_size: 32
-dataset:
-  name: MNIST
-  channels: 1
-  root: ./data
-  num_workers: 4
 wandb:
   log: true
-  dir: ./
-  experiment_name: ''
-  entity: ''
-  project: ''
+  dir: ./runs
+  experiment_name: 50_epochs
+  entity: hofland-jeroen
+  project: cc5k
+debugger:
+  batches: False # number | False
+  profiler: SimpleProfiler # SimpleProfiler | AdvancedProfiler | False
+  accelerator: False
+  batch_tuner: False
+  anomaly: True
+model:
+  name: cubicasa
+  input_slice: [21, 12, 11]
+  loss: uncertainty
+  weights: False # path | False
+optimizer:
+  name: adam
+  lr: 0.001
+  eps: 1e-08
+  betas: [0.9, 0.999]
+  patience: 10
+train:
+  batch_size: 16
+  accumulate_grad_batches: 4 # effective batch size = accumulate_grad_batches * batch_size
+  resume: runs\cc5k\eocweugo\checkpoints\epoch=49-step=3200.ckpt #runs\cc5k\lxymb20i\checkpoints\epoch=1-step=128.ckpt # path | False
+  max_epochs: 51
+  max_time:
+    days: 0
+    hours: 14
+    minutes: 0
+  debug:
+    enable: False
+    train_batches: 5 # number | False
+    val_batches: 5 # number | False
+    test_batches: 5 # number | False
+dataset:
+  name: cubicasa
+  num_workers: 0 # 0 (windows) | #cpus (linux)
+  format: lmdb # lmdb or txt
+  augmentations: True
+  scale: True
+  image_size: 256
+  files:
+    root: ./data/
+    train: train_hqa_hq.txt
+    val: val_hqa_hq.txt
+    test: test_c.txt
