@@ -80,6 +80,9 @@ def main():
     # Set float32 precision for matrix multiplication (speedup on modern GPUs)
     torch.set_float32_matmul_precision("medium")
 
+    # Watch model for logging, gradients, parameters, and optimizer parameters
+    wandb_logger.watch(model, log="all")
+
     # Runner is the PyTorch Lightning module that contains the instructions for training and validation
     if cfg.model.weights and os.path.exists(cfg.model.weights):
         runner = Runner.load_from_checkpoint(cfg.model.weights, cfg=cfg, model=model, loss_fn=loss_fn, labels=labels)
@@ -97,7 +100,7 @@ def main():
         accelerator="auto",
         num_nodes=torch.cuda.device_count(),
         accumulate_grad_batches=cfg.train.accumulate_grad_batches,
-        precision="16-mixed", 
+        precision="32-true", 
         limit_train_batches=cfg.train.debug.train_batches if cfg.train.debug.enable else None,
         limit_val_batches=cfg.train.debug.val_batches if cfg.train.debug.enable else None,
         limit_test_batches=cfg.train.debug.test_batches if cfg.train.debug.enable else None,

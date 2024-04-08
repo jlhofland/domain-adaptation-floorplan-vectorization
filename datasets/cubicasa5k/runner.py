@@ -78,8 +78,8 @@ class Runner(pl.LightningModule):
         
         # Take the argmax of the rooms and icons
         heats_pred_max = torch.argmax(heats_pred, dim=0)
-        heats_pred_max = torch.argmax(rooms_pred, dim=0)
-        heats_pred_max = torch.argmax(icons_pred, dim=0)
+        rooms_pred_max = torch.argmax(rooms_pred, dim=0)
+        icons_pred_max = torch.argmax(icons_pred, dim=0)
 
         # Resize y to match y_hat
         y = F.interpolate(y, size=y_hat.shape[2:], mode='bilinear', align_corners=False)
@@ -93,7 +93,7 @@ class Runner(pl.LightningModule):
         # Take the argmax of heatmaps
         # heats_label = torch.argmax(heats_label, dim=0)
 
-        return (heats_pred, None), (rooms_pred, rooms_label), (icons_pred, icons_label)
+        return (heats_pred_max, None), (rooms_pred_max, rooms_label), (icons_pred_max, icons_label)
     
     def _log_scores(self, score, class_core, stage, group):
         # Log scores for each metric

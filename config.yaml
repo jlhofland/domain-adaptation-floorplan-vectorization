@@ -2,7 +2,7 @@ seed: 0
 wandb:
   log: true
   dir: ./runs
-  experiment_name: 50_epochs
+  experiment_name: 50_epochs_anomalys
   entity: hofland-jeroen
   project: cc5k
 debugger:
@@ -10,7 +10,7 @@ debugger:
   profiler: SimpleProfiler # SimpleProfiler | AdvancedProfiler | False
   accelerator: False
   batch_tuner: False
-  anomaly: True
+  anomaly: False
 model:
   name: cubicasa
   input_slice: [21, 12, 11]
@@ -25,8 +25,8 @@ optimizer:
 train:
   batch_size: 16
   accumulate_grad_batches: 4 # effective batch size = accumulate_grad_batches * batch_size
-  resume: runs\cc5k\eocweugo\checkpoints\epoch=49-step=3200.ckpt #runs\cc5k\lxymb20i\checkpoints\epoch=1-step=128.ckpt # path | False
-  max_epochs: 51
+  resume: False #runs\cc5k\lxymb20i\checkpoints\epoch=1-step=128.ckpt # path | False
+  max_epochs: 50
   max_time:
     days: 0
     hours: 14
