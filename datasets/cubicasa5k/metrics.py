@@ -40,7 +40,7 @@ class CustomMetric(tm.Metric):
         acc_cls = torch.diag(hist_tensor) / hist_tensor.sum(dim=1)
 
         # Convert class-wise accuracy tensor to dictionary for easier access
-        cls_acc = {str(i): acc_cls[i].item() for i in range(len(acc_cls))}
+        cls_acc = {str(i): acc_cls[i].detach() for i in range(len(acc_cls))}
 
         # Calculate mean accuracy
         acc_cls = torch.nanmean(acc_cls)
@@ -56,7 +56,7 @@ class CustomMetric(tm.Metric):
         fwavacc = (freq[freq > 0] * iu[freq > 0]).sum()
 
         # Convert class-wise IoU tensor to dictionary for easier access
-        cls_iu = {str(i): iu[i].item() for i in range(len(iu))}
+        cls_iu = {str(i): iu[i].detach() for i in range(len(iu))}
 
         # Reset the confusion matrix
         if reset:
@@ -64,10 +64,10 @@ class CustomMetric(tm.Metric):
 
         return (
             {
-                "Overall Acc": acc.item(),
-                "Mean Acc": acc_cls.item(),
-                "FreqW Acc": fwavacc.item(),
-                "Mean IoU": mean_iu.item(),
+                "Overall Acc": acc.detach(),
+                "Mean Acc": acc_cls.detach(),
+                "FreqW Acc": fwavacc.detach(),
+                "Mean IoU": mean_iu.detach(),
             },
             {
                 "Class IoU": cls_iu,

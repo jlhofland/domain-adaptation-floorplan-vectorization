@@ -93,7 +93,11 @@ def main():
     trainer = Trainer(
         # Timing
         max_epochs=cfg.train.max_epochs,
-        max_time={"days": cfg.train.max_time.days, "hours": cfg.train.max_time.hours, "minutes": cfg.train.max_time.minutes},
+        max_time={
+            "days": cfg.train.max_time.days, 
+            "hours": cfg.train.max_time.hours, 
+            "minutes": cfg.train.max_time.minutes
+        } if cfg.train.max_time.enable else None,
 
         # Speedup 
         strategy="auto", 

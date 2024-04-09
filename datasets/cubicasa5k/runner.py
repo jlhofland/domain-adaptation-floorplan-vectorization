@@ -9,7 +9,7 @@ class Runner(pl.LightningModule):
     def __init__(self, cfg, model, loss_fn, labels, *args, **kwargs):
         # Initialize the LightningModule
         super().__init__()
-        self.save_hyperparameters()
+        self.save_hyperparameters(ignore=['model', 'loss_fn'])
 
         # Set the variables
         self.cfg     = cfg
@@ -120,7 +120,7 @@ class Runner(pl.LightningModule):
         class_rooms = {index: value for index, value in enumerate(self.labels["room"])}
         class_icons = {index: value for index, value in enumerate(self.labels["icon"])}
 
-        if (self.cfg.train.debug.enable):
+        if (self.cfg.train.debug.print):
             # Print shapes
             print("heats_pred", heats_pred.shape)
             # print("heats_label", heats_label.shape)

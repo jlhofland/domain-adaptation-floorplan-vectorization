@@ -42,7 +42,7 @@ class CubiCasa(pl.LightningDataModule):
         self.data_root = cfg.dataset.files.root
         self.train_file = cfg.dataset.files.train
         self.val_file = cfg.dataset.files.val
-        self.test_file = cfg.dataset.files.test 
+        self.test_file = cfg.dataset.files.test
 
     def train_dataloader(self):
         return torch.utils.data.DataLoader(
@@ -53,13 +53,14 @@ class CubiCasa(pl.LightningDataModule):
                 augmentations=self.augmentations['train'],
                 img_norm=True,
                 format=self.format,
-                original_size=False,
+                original_size=True,
                 lmdb_folder='cubi_lmdb/',
             ),
             batch_size=self.batch_size,
-            shuffle=True,
+            shuffle=False,
             num_workers=self.num_workers,
-            persistent_workers=False,
+            pin_memory=False,
+            persistent_workers=True,
         )
 
     def val_dataloader(self):
@@ -71,13 +72,14 @@ class CubiCasa(pl.LightningDataModule):
                 augmentations=self.augmentations['val'],
                 img_norm=True,
                 format=self.format,
-                original_size=False,
+                original_size=True,
                 lmdb_folder='cubi_lmdb/',
             ),
             batch_size=1,
             shuffle=False,
+            pin_memory=False,
             num_workers=self.num_workers,
-            persistent_workers=False
+            persistent_workers=True,
         )
 
     def test_dataloader(self):
@@ -89,11 +91,12 @@ class CubiCasa(pl.LightningDataModule):
                 augmentations=self.augmentations['test'],
                 img_norm=True,
                 format=self.format,
-                original_size=False,
+                original_size=True,
                 lmdb_folder='cubi_lmdb/',
             ),
             batch_size=1,
             shuffle=False,
+            pin_memory=False,
             num_workers=self.num_workers,
             persistent_workers=False,
         )

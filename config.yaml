@@ -2,7 +2,7 @@ seed: 0
 wandb:
   log: true
   dir: ./runs
-  experiment_name: 50_epochs_anomalys
+  experiment_name: TEST_B8X4_10W
   entity: hofland-jeroen
   project: cc5k
 debugger:
@@ -23,23 +23,25 @@ optimizer:
   betas: [0.9, 0.999]
   patience: 10
 train:
-  batch_size: 16
+  batch_size: 8
   accumulate_grad_batches: 4 # effective batch size = accumulate_grad_batches * batch_size
-  resume: False #runs\cc5k\lxymb20i\checkpoints\epoch=1-step=128.ckpt # path | False
-  max_epochs: 50
+  resume: False # path | False
+  max_epochs: 100
   max_time:
+    enable: False
     days: 0
-    hours: 14
+    hours: 0
     minutes: 0
   debug:
     enable: False
-    train_batches: 5 # number | False
-    val_batches: 5 # number | False
-    test_batches: 5 # number | False
+    print: False
+    train_batches: 50 # number | False
+    val_batches: 50 # number | False
+    test_batches: 50 # number | False
 dataset:
   name: cubicasa
-  num_workers: 0 # 0 (windows) | #cpus (linux)
-  format: lmdb # lmdb or txt
+  num_workers: 10 # 0 (windows) | #cpus (linux)
+  format: txt # lmdb or txt
   augmentations: True
   scale: True
   image_size: 256
