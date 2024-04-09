@@ -2,7 +2,7 @@ seed: 0
 wandb:
   log: true
   dir: ./runs
-  experiment_name: TEST_B8X4_10W
+  experiment_name: TRAIN_B8X4_10W_100E
   entity: hofland-jeroen
   project: cc5k
 debugger:
