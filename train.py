@@ -16,6 +16,7 @@ from pytorch_lightning.callbacks import DeviceStatsMonitor
 from pytorch_lightning.tuner import Tuner
 from pytorch_lightning import Trainer
 from pytorch_lightning import seed_everything
+from pytorch_lightning.callbacks import ModelCheckpoint
 
 # Datasets
 from datasets.cubicasa5k.runner import Runner
@@ -114,7 +115,10 @@ def main():
         logger=wandb_logger,
         fast_dev_run=cfg.debugger.batches,
         profiler=eval(cfg.debugger.profiler)(dirpath=cfg.wandb.dir+"/profiler", filename=cfg.wandb.experiment_name) if cfg.debugger.profiler else None,
-        callbacks=[DeviceStatsMonitor(cpu_stats=True)] if cfg.debugger.accelerator else None
+        callbacks=[
+            # DeviceStatsMonitor(cpu_stats=True) if cfg.debugger.accelerator else None,
+            ModelCheckpoint(monitor="val/loss/all_var", mode="min", save_top_k=1)
+        ]
     )
 
     # Scale batch size using PyTorch Lightning's Tuner

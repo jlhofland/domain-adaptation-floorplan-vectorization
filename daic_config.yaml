@@ -1,8 +1,8 @@
 seed: 0
 wandb:
   log: true
-  dir: ./runs
-  experiment_name: LOCAL_DEBUG
+  dir: /home/nfs/jlhofland/runs
+  experiment_name: TRAIN_100E_400E_B20_32W
   entity: hofland-jeroen
   project: cc5k
 debugger:
@@ -23,14 +23,14 @@ optimizer:
   betas: [0.9, 0.999]
   patience: 10
 train:
-  batch_size: 10
-  accumulate_grad_batches: 2 # effective batch size = accumulate_grad_batches * batch_size
-  resume: False # path | False
-  max_epochs: 100
+  batch_size: 20
+  accumulate_grad_batches: 1 # effective batch size = accumulate_grad_batches * batch_size
+  resume: /home/nfs/jlhofland/weights/model-4.ckpt # path | False
+  max_epochs: 400
   max_time:
     enable: False
     days: 0
-    hours: 0
+    hours: 23
     minutes: 0
   debug:
     enable: False
@@ -40,13 +40,13 @@ train:
     test_batches: 50 # number | False
 dataset:
   name: cubicasa
-  num_workers: 10 # 10 (local) | 0.5 * cpus (cluster)
+  num_workers: 8 # 0 (windows) | #cpus (linux)
   format: txt # lmdb or txt
   augmentations: True
-  scale: True
+  scale: False
   image_size: 256
   files:
-    root: ./data/
+    root: /default/
     train: train_hqa_hq.txt
     val: val_hqa_hq.txt
     test: test_c.txt

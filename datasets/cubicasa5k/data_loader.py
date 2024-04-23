@@ -57,7 +57,7 @@ class CubiCasa(pl.LightningDataModule):
                 lmdb_folder='cubi_lmdb/',
             ),
             batch_size=self.batch_size,
-            shuffle=False,
+            shuffle=True,
             num_workers=self.num_workers,
             pin_memory=False,
             persistent_workers=True,
