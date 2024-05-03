@@ -251,7 +251,6 @@ class Runner(pl.LightningModule):
         self.losses[stage] = []
         torch.cuda.empty_cache()
 
-
     def on_test_epoch_end(self):
         # Set stage to test
         stage = "test"

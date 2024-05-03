@@ -161,6 +161,7 @@ cython_debug/
 
 # CUSTOM
 data
+data_new
 wandb
 runs
 .vscode

@@ -12,7 +12,7 @@ import warnings
 
 def main(args, logger):
     logger.info("Opening database...")
-    env = lmdb.open(args.lmdb, map_size=int(200e9))
+    env = lmdb.open(args.lmdb, map_size=0) # int(200e9)
 
     logger.info("Creating data loader...")
     data = FloorplanSVG(args.data_path, args.txt, format='txt', original_size=True)

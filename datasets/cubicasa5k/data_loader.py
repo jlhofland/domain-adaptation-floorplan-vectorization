@@ -16,6 +16,13 @@ class CubiCasa(pl.LightningDataModule):
         self.batch_size = cfg.train.batch_size
         self.num_workers = cfg.dataset.num_workers
         self.format = cfg.dataset.format
+        self.persistent_workers = cfg.dataset.persistent_workers
+        self.original_size = cfg.dataset.original_size
+        self.grayscale = cfg.dataset.grayscale
+        self.load_ram = cfg.dataset.load_ram
+        self.save_samples = cfg.dataset.save_samples
+        self.load_samples = cfg.dataset.load_samples
+        self.pin_memory = cfg.dataset.pin_memory
 
         # Scale or crop input
         size = (cfg.dataset.image_size, cfg.dataset.image_size)
@@ -29,7 +36,7 @@ class CubiCasa(pl.LightningDataModule):
             scale_augmentations,
             RandomRotations(format='cubi'),
             DictToTensor(),
-            ColorJitterTorch()
+            ColorJitterTorch(gray=cfg.dataset.grayscale)
         ]) if cfg.dataset.augmentations else DictToTensor()
 
         # Set augmentations if provided
@@ -53,14 +60,19 @@ class CubiCasa(pl.LightningDataModule):
                 augmentations=self.augmentations['train'],
                 img_norm=True,
                 format=self.format,
-                original_size=True,
+                original_size=self.original_size,
                 lmdb_folder='cubi_lmdb/',
+                grayscale=self.grayscale, 
+                load_ram=self.load_ram, 
+                save_samples=self.save_samples,
+                load_samples=self.load_samples,
+                num_workers=self.num_workers,
             ),
             batch_size=self.batch_size,
             shuffle=True,
             num_workers=self.num_workers,
-            pin_memory=False,
-            persistent_workers=True,
+            pin_memory=self.pin_memory,
+            persistent_workers=self.persistent_workers,
         )
 
     def val_dataloader(self):
@@ -72,14 +84,19 @@ class CubiCasa(pl.LightningDataModule):
                 augmentations=self.augmentations['val'],
                 img_norm=True,
                 format=self.format,
-                original_size=True,
+                original_size=self.original_size,
                 lmdb_folder='cubi_lmdb/',
+                grayscale=self.grayscale, 
+                load_ram=self.load_ram, 
+                save_samples=self.save_samples,
+                load_samples=self.load_samples,
+                num_workers=self.num_workers,
             ),
             batch_size=1,
             shuffle=False,
-            pin_memory=False,
+            pin_memory=self.pin_memory,
             num_workers=self.num_workers,
-            persistent_workers=True,
+            persistent_workers=self.persistent_workers,
         )
 
     def test_dataloader(self):
@@ -91,12 +108,17 @@ class CubiCasa(pl.LightningDataModule):
                 augmentations=self.augmentations['test'],
                 img_norm=True,
                 format=self.format,
-                original_size=True,
+                original_size=self.original_size,
                 lmdb_folder='cubi_lmdb/',
+                grayscale=self.grayscale, 
+                load_ram=False, 
+                save_samples=False,
+                load_samples=False,
+                num_workers=self.num_workers,
             ),
             batch_size=1,
             shuffle=False,
             pin_memory=False,
             num_workers=self.num_workers,
-            persistent_workers=False,
+            persistent_workers=self.persistent_workers,
         )

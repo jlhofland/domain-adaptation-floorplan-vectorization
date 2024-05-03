@@ -486,12 +486,13 @@ class RandomCropToSizeTorch(object):
 
 class ColorJitterTorch(object):
 
-    def __init__(self, b_var=0.4, c_var=0.4, s_var=0.4, dtype=torch.float32, version='dict'):
+    def __init__(self, b_var=0.4, c_var=0.4, s_var=0.4, dtype=torch.float32, version='dict', gray=False):
         self.b_var = b_var
         self.c_var = c_var
         self.s_var = s_var
         self.dtype = dtype
         self.version = version
+        self.gray = gray
 
     def __call__(self, sample):
         res = sample
@@ -512,6 +513,11 @@ class ColorJitterTorch(object):
         return res
 
     def grayscale(self, img):
+        # If the image is already grayscale, return it
+        if self.gray:
+            return img
+        
+        # If the image is not grayscale, convert it
         red = img[0] * 0.299
         green = img[1] * 0.587
         blue = img[2] * 0.114
@@ -519,6 +525,7 @@ class ColorJitterTorch(object):
         gray = torch.clamp(gray, min=0, max=255)
         res = torch.stack((gray, gray, gray), dim=0)
 
+        # Return the grayscale image
         return res
 
     def saturation(self, img, var):

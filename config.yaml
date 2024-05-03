@@ -1,8 +1,8 @@
 seed: 0
 wandb:
-  log: true
+  log: True
   dir: ./runs
-  experiment_name: LOCAL_DEBUG
+  experiment_name: DEBUG_GRAY_5
   entity: hofland-jeroen
   project: cc5k
 debugger:
@@ -23,8 +23,8 @@ optimizer:
   betas: [0.9, 0.999]
   patience: 10
 train:
-  batch_size: 10
-  accumulate_grad_batches: 2 # effective batch size = accumulate_grad_batches * batch_size
+  batch_size: 20
+  accumulate_grad_batches: 1 # effective batch size = accumulate_grad_batches * batch_size
   resume: False # path | False
   max_epochs: 100
   max_time:
@@ -40,9 +40,16 @@ train:
     test_batches: 50 # number | False
 dataset:
   name: cubicasa
-  num_workers: 10 # 10 (local) | 0.5 * cpus (cluster)
+  num_workers: 8 # 10 (local) | 0.5 * cpus (cluster)
   format: txt # lmdb or txt
   augmentations: True
+  original_size: True
+  persistent_workers: True
+  pin_memory: True
+  grayscale: True
+  load_ram: False
+  save_samples: False
+  load_samples: True
   scale: True
   image_size: 256
   files:
