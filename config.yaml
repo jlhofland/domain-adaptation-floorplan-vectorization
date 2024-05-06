@@ -1,13 +1,14 @@
 seed: 0
 wandb:
   log: True
-  dir: ./runs
-  experiment_name: DEBUG_GRAY_5
+  dir: /tudelft.net/staff-umbrella/StudentsCVlab/jlhofland
+  experiment_name: GRAY_100E_B20
   entity: hofland-jeroen
   project: cc5k
 debugger:
   batches: False # number | False
   profiler: SimpleProfiler # SimpleProfiler | AdvancedProfiler | False
+  dir: /home/nfs/jlhofland/debugging
   accelerator: False
   batch_tuner: False
   anomaly: False
@@ -53,7 +54,7 @@ dataset:
   scale: True
   image_size: 256
   files:
-    root: ./data/
+    root: /tudelft.net/staff-umbrella/StudentsCVlab/jlhofland
     train: train_hqa_hq.txt
     val: val_hqa_hq.txt
     test: test_c.txt

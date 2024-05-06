@@ -114,7 +114,7 @@ def main():
         detect_anomaly=cfg.debugger.anomaly,
         logger=wandb_logger,
         fast_dev_run=cfg.debugger.batches,
-        profiler=eval(cfg.debugger.profiler)(dirpath=cfg.wandb.dir+"/profiler", filename=cfg.wandb.experiment_name) if cfg.debugger.profiler else None,
+        profiler=eval(cfg.debugger.profiler)(dirpath=cfg.debugger.dir+"/profiler", filename=cfg.wandb.experiment_name) if cfg.debugger.profiler else None,
         callbacks=[
             # DeviceStatsMonitor(cpu_stats=True) if cfg.debugger.accelerator else None,
             ModelCheckpoint(monitor="val/loss/all_var", mode="min", save_top_k=1)

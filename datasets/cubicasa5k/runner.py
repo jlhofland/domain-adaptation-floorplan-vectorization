@@ -192,7 +192,7 @@ class Runner(pl.LightningModule):
         self.val_score_icons.update(*icons)
 
         # Log sample
-        if batch_idx < 5:
+        if batch_idx < 1:
             self._log_sample(*heats, *rooms, *icons, batch, batch_idx, "val/samples")
 
         # Log step-level loss, then append to list for epoch-level loss
