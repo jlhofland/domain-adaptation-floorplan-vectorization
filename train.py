@@ -20,7 +20,7 @@ from pytorch_lightning.callbacks import ModelCheckpoint
 
 # Datasets
 from datasets.cubicasa5k.runner import Runner
-from datasets.cubicasa5k.data_loader import CubiCasa
+from datasets.cubicasa5k.data_loader import CubiCasa5K
 
 # Import factories
 import model_factory
@@ -76,7 +76,7 @@ def main():
     model = model_factory.factory(cfg)
     
     # Create datasets using factory pattern
-    dataset = CubiCasa(cfg)
+    dataset = CubiCasa5K(cfg)
 
     # Set float32 precision for matrix multiplication (speedup on modern GPUs)
     torch.set_float32_matmul_precision("medium")
@@ -132,8 +132,8 @@ def main():
     else:
         trainer.fit(runner, datamodule=dataset)
 
-    # Test
-    trainer.test(runner, dataset.test_dataloader())
+    # Test colored images
+    trainer.test(runner, dataset.test_dataloader(cfg.dataset.files.test.d3))
 
 if __name__ == '__main__':
     # Ignore UserWarning related to libpng

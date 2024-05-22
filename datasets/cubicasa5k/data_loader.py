@@ -1,124 +1,103 @@
 import torch
-import torchvision
 import pytorch_lightning as pl
 
 # Import cubicasa5k dataset
+from datasets.cubicasa5k.loaders.svg_loader_mmd import FloorplanSVGMMD
 from datasets.cubicasa5k.loaders.svg_loader import FloorplanSVG
 from datasets.cubicasa5k.loaders.augmentations import (RandomCropToSizeTorch, ResizePaddedTorch, Compose, DictToTensor, ColorJitterTorch, RandomRotations)
+from datasets.cubicasa5k.loaders.augmentations_mmd import (RandomCropToSizeTorchMMD, ResizePaddedTorchMMD, DictToTensorMMD, RandomRotationsMMD)
 from torchvision.transforms import RandomChoice
+from torch.nn import functional as F
 
-class CubiCasa(pl.LightningDataModule):
+
+class CubiCasa5K(pl.LightningDataModule):
     def __init__(self, cfg):
         # Call super constructor
         super().__init__()
 
-        # Set batch size and number of workers
-        self.batch_size = cfg.train.batch_size
-        self.num_workers = cfg.dataset.num_workers
-        self.format = cfg.dataset.format
-        self.persistent_workers = cfg.dataset.persistent_workers
-        self.original_size = cfg.dataset.original_size
-        self.grayscale = cfg.dataset.grayscale
-        self.load_ram = cfg.dataset.load_ram
-        self.save_samples = cfg.dataset.save_samples
-        self.load_samples = cfg.dataset.load_samples
-        self.pin_memory = cfg.dataset.pin_memory
+        # Define the configuration
+        self.cfg = cfg
+        
+        if cfg.model.use_mmd:
+            self.svg_loader = FloorplanSVGMMD
+            self.random_crop = RandomCropToSizeTorchMMD
+            self.resize_padded = ResizePaddedTorchMMD
+            self.random_rotations = RandomRotationsMMD
+            self.dict_tensor = DictToTensorMMD
+        else:
+            self.svg_loader = FloorplanSVG
+            self.random_crop = RandomCropToSizeTorch
+            self.resize_padded = ResizePaddedTorch
+            self.random_rotations = RandomRotations
+            self.dict_tensor = DictToTensor
 
-        # Scale or crop input
+        # Get image size
         size = (cfg.dataset.image_size, cfg.dataset.image_size)
+
+        # Set scaling and cropping augmentations
         scale_augmentations = RandomChoice([
-            RandomCropToSizeTorch(data_format='dict', size=size),
-            ResizePaddedTorch((0, 0), data_format='dict', size=size)
-        ]) if cfg.dataset.scale else RandomCropToSizeTorch(data_format='dict', size=size)
+            self.random_crop(data_format='dict', size=size),
+            self.resize_padded((0, 0), data_format='dict', size=size)
+        ]) if cfg.dataset.scale else self.random_crop(data_format='dict', size=size)
 
-        # Set augmentations if not provided
-        training_augmentations = Compose([
+        # Set training augmentations to apply
+        self.augmentations = Compose([
             scale_augmentations,
-            RandomRotations(format='cubi'),
-            DictToTensor(),
+            self.random_rotations(format='cubi'),
+            self.dict_tensor(),
             ColorJitterTorch(gray=cfg.dataset.grayscale)
-        ]) if cfg.dataset.augmentations else DictToTensor()
+        ]) if cfg.dataset.augmentations else self.dict_tensor()
 
-        # Set augmentations if provided
-        self.augmentations = {
-            "train": training_augmentations, 
-            "val": DictToTensor(), 
-            "test": DictToTensor()}
 
-        # Set data root and files
-        self.data_root = cfg.dataset.files.root
-        self.train_file = cfg.dataset.files.train
-        self.val_file = cfg.dataset.files.val
-        self.test_file = cfg.dataset.files.test
+    def train_data(self):
+        return torch.utils.data.DataLoader(
+            self.svg_loader(
+                augmentations=self.augmentations,
+                cfg=self.cfg,
+                pre_load=True,
+                source_list=self.cfg.dataset.files.train,
+                target_list=self.cfg.dataset.files.mmd.train,
+            ),
+            batch_size=self.cfg.train.batch_size,
+            shuffle=True,
+            num_workers=self.cfg.dataset.num_workers,
+            pin_memory=self.cfg.dataset.pin_memory,
+            persistent_workers=self.cfg.dataset.persistent_workers,
+        )
 
     def train_dataloader(self):
-        return torch.utils.data.DataLoader(
-            FloorplanSVG(
-                data_folder=self.data_root,
-                data_file=self.train_file,
-                is_transform=True,
-                augmentations=self.augmentations['train'],
-                img_norm=True,
-                format=self.format,
-                original_size=self.original_size,
-                lmdb_folder='cubi_lmdb/',
-                grayscale=self.grayscale, 
-                load_ram=self.load_ram, 
-                save_samples=self.save_samples,
-                load_samples=self.load_samples,
-                num_workers=self.num_workers,
-            ),
-            batch_size=self.batch_size,
-            shuffle=True,
-            num_workers=self.num_workers,
-            pin_memory=self.pin_memory,
-            persistent_workers=self.persistent_workers,
-        )
+        return self.train_data()
 
-    def val_dataloader(self):
+    def val_data(self):
         return torch.utils.data.DataLoader(
-            FloorplanSVG(
-                data_folder=self.data_root,
-                data_file=self.val_file,
-                is_transform=True,
-                augmentations=self.augmentations['val'],
-                img_norm=True,
-                format=self.format,
-                original_size=self.original_size,
-                lmdb_folder='cubi_lmdb/',
-                grayscale=self.grayscale, 
-                load_ram=self.load_ram, 
-                save_samples=self.save_samples,
-                load_samples=self.load_samples,
-                num_workers=self.num_workers,
+            self.svg_loader(
+                augmentations=self.dict_tensor(),
+                cfg=self.cfg,
+                pre_load=True,
+                source_list=self.cfg.dataset.files.val,
+                target_list=self.cfg.dataset.files.mmd.val,
             ),
             batch_size=1,
             shuffle=False,
-            pin_memory=self.pin_memory,
-            num_workers=self.num_workers,
-            persistent_workers=self.persistent_workers,
+            num_workers=self.cfg.dataset.num_workers,
+            pin_memory=self.cfg.dataset.pin_memory,
+            persistent_workers=self.cfg.dataset.persistent_workers,
         )
+    
+    def val_dataloader(self):
+        return self.val_data()
 
-    def test_dataloader(self):
+    def test_dataloader(self, data_list=None, batch_size=1, pre_load=False):
         return torch.utils.data.DataLoader(
             FloorplanSVG(
-                data_folder=self.data_root,
-                data_file=self.test_file,
-                is_transform=True,
-                augmentations=self.augmentations['test'],
-                img_norm=True,
-                format=self.format,
-                original_size=self.original_size,
-                lmdb_folder='cubi_lmdb/',
-                grayscale=self.grayscale, 
-                load_ram=False, 
-                save_samples=False,
-                load_samples=False,
-                num_workers=self.num_workers,
+                augmentations=DictToTensor(),
+                cfg=self.cfg,
+                pre_load=pre_load,
+                source_list=data_list
             ),
-            batch_size=1,
+            batch_size=batch_size,
             shuffle=False,
             pin_memory=False,
-            num_workers=self.num_workers,
-            persistent_workers=self.persistent_workers,
+            num_workers=self.cfg.dataset.num_workers,
+            persistent_workers=False
         )

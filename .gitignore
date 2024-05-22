@@ -161,9 +161,11 @@ cython_debug/
 
 # CUSTOM
 data
-data_new
+data_backup
+debugging
 wandb
 runs
+runs_new
 .vscode
 cache
 pytorch-lightning-example

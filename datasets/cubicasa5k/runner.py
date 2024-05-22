@@ -32,9 +32,12 @@ class Runner(pl.LightningModule):
         self.test_score_rooms = CustomMetric(cfg.model.input_slice[1])
         self.test_score_icons = CustomMetric(cfg.model.input_slice[2])
 
-    def forward(self, x):
+    def forward(self, x, return_latent=False, return_output=True):
         # Runner needs to redirect any model.forward() calls to the actual network
-        return self.model(x)
+        y_hat, y_latent = self.model(x, return_latent, return_output)
+
+        # Return the prediction and latent space
+        return y_hat, y_latent
 
     def configure_optimizers(self):
         # Concatinate model and loss function parameters
@@ -62,18 +65,33 @@ class Runner(pl.LightningModule):
         # Transfer data to GPU
         x = batch['image']
         y = batch['label']
-        y_hat = self.model(x)
 
-        # Calculate loss
-        loss = self.loss_fn(y_hat, y)
+        # If we have target data, calculate the loss using MMD
+        if 'target' in batch and self.cfg.model.use_mmd:
+            # Forward pass to get prediction
+            y_hat, y_latent = self.model(x, return_latent=True)
+
+            # Get target image
+            t = batch['target']
+
+            # Forward pass to get prediction
+            _, t_latent = self.model(t, return_latent=True, return_output=False)
+
+            # Calculate the loss
+            loss = self.loss_fn(y_hat, y, y_latent, t_latent)
+        else:
+            # Calculate prediction
+            y_hat, _ = self.model(x)
+
+            # Calculate the loss
+            loss = self.loss_fn(y_hat, y)
+
+        # Return loss and predictions
         return loss, y_hat, y
     
     def _retrieve(self, y_hat, y):
         # Select rooms and icons from the prediction
         # y_hat = [batch_size, [heatmaps, rooms, icons], height, width] = [1, [21, 13, 17], H, W]
-        # rooms_pred = y_hat[0, self.cfg.model.input_slice[0]:self.cfg.model.input_slice[0]+self.cfg.model.input_slice[1]]
-        # icons_pred = y_hat[0, self.cfg.model.input_slice[0]+self.cfg.model.input_slice[1]:]
-
         heats_pred, rooms_pred, icons_pred = torch.split(y_hat[0], tuple(self.cfg.model.input_slice), dim=0)
         
         # Take the argmax of the rooms and icons
@@ -86,15 +104,131 @@ class Runner(pl.LightningModule):
 
         # Select rooms and icons from the label
         # y = [batch_size, [heatmaps, room_class, icon_class], height, width] = [1, [21,  1,  1], H, W]
-        # heats_label = y[0, :self.cfg.model.input_slice[0]]
         rooms_label = y[0, self.cfg.model.input_slice[0]]
         icons_label = y[0, self.cfg.model.input_slice[0]+1]
 
         # Take the argmax of heatmaps
+        # heats_label = y[0, :self.cfg.model.input_slice[0]]
         # heats_label = torch.argmax(heats_label, dim=0)
 
+        # Return the predictions and labels
         return (heats_pred_max, None), (rooms_pred_max, rooms_label), (icons_pred_max, icons_label)
-    
+
+    ##############################
+    ##                          ##
+    ##    STEPPING fuctions     ##
+    ##                          ##
+    ##############################
+    def training_step(self, batch, batch_idx):
+        # Forward pass
+        loss, _, _ = self._step(batch)
+
+        # Log step-level loss, then append to list for epoch-level loss
+        self.losses["train"].append(self.loss_fn.get_loss())
+
+        # Return loss for logging
+        return loss
+
+    def validation_step(self, batch, batch_idx):
+        # Forward pass
+        loss, y_hat, y = self._step(batch)
+
+        # Retrieve predictions and labels for both rooms and icons
+        heats, rooms, icons = self._retrieve(y_hat, y)
+
+        # Update metrics
+        self.val_score_rooms.update(*rooms)
+        self.val_score_icons.update(*icons)
+
+        # Log sample
+        if batch_idx < 1:
+            self._log_sample(*heats, *rooms, *icons, batch, batch_idx, "val/samples")
+
+        # Log step-level loss, then append to list for epoch-level loss
+        self.losses["val"].append(self.loss_fn.get_loss())
+
+        # Return loss for logging
+        return loss
+
+    def test_step(self, batch, batch_idx):
+        # Forward pass
+        loss, y_hat, y = self._step(batch)
+
+        # Retrieve predictions and labels
+        heats, rooms, icons = self._retrieve(y_hat, y)
+
+        # Update metrics
+        self.test_score_rooms.update(*rooms)
+        self.test_score_icons.update(*icons)
+
+        # Log sample
+        self._log_sample(*heats, *rooms, *icons, batch, batch_idx, "test/samples")
+
+        # Log test loss
+        self.losses["test"].append(self.loss_fn.get_loss())
+
+        # Return loss for logging
+        return loss
+
+    ##############################
+    ##                          ##
+    ##     ENDING fuctions      ##
+    ##                          ##
+    ##############################
+    def on_train_epoch_end(self):
+        # Set stage to train
+        stage = "train"
+
+        # Calculate average training loss
+        self._log_losses(stage)
+        
+        # Reset training loss, and clear GPU memory
+        self.losses[stage] = []
+        torch.cuda.empty_cache()
+
+    def on_validation_epoch_end(self):
+        # Set stage to validation
+        stage = "val"
+
+        # Compute scores
+        rooms = self.val_score_rooms.compute(reset=True)
+        icons = self.val_score_icons.compute(reset=True)
+
+        # Log scores
+        self._log_scores(*rooms, stage, "room")
+        self._log_scores(*icons, stage, "icon")
+
+        # Calculate average validation loss
+        self._log_losses(stage)
+
+        # Reset validation loss, and clear GPU memory
+        self.losses[stage] = []
+        torch.cuda.empty_cache()
+
+    def on_test_epoch_end(self):
+        # Set stage to test
+        stage = "test"
+
+        # Calculate scores
+        rooms = self.test_score_rooms.compute()
+        icons = self.test_score_icons.compute()
+
+        # Log scores
+        self._log_scores(*rooms, stage, "room")
+        self._log_scores(*icons, stage, "icon")
+
+        # Calculate average test loss
+        self._log_losses(stage)
+
+        # Reset test loss, and clear GPU memory
+        self.losses[stage] = []
+        torch.cuda.empty_cache()
+
+    ##############################
+    ##                          ##
+    ##    LOGGING functions     ##
+    ##                          ##
+    ##############################
     def _log_scores(self, score, class_core, stage, group):
         # Log scores for each metric
         for metric, value in score.items():
@@ -168,104 +302,3 @@ class Runner(pl.LightningModule):
                 "class_labels": class_icons
             }
         })})
-
-
-    def training_step(self, batch, batch_idx):
-        # Forward pass
-        loss, _, _ = self._step(batch)
-
-        # Log step-level loss, then append to list for epoch-level loss
-        self.losses["train"].append(self.loss_fn.get_loss())
-
-        # Return loss for logging
-        return loss
-
-    def validation_step(self, batch, batch_idx):
-        # Forward pass
-        loss, y_hat, y = self._step(batch)
-
-        # Retrieve predictions and labels for both rooms and icons
-        heats, rooms, icons = self._retrieve(y_hat, y)
-
-        # Update metrics
-        self.val_score_rooms.update(*rooms)
-        self.val_score_icons.update(*icons)
-
-        # Log sample
-        if batch_idx < 1:
-            self._log_sample(*heats, *rooms, *icons, batch, batch_idx, "val/samples")
-
-        # Log step-level loss, then append to list for epoch-level loss
-        self.losses["val"].append(self.loss_fn.get_loss())
-
-        # Return loss for logging
-        return loss
-
-    def test_step(self, batch, batch_idx):
-        # Forward pass
-        loss, y_hat, y = self._step(batch)
-
-        # Retrieve predictions and labels
-        heats, rooms, icons = self._retrieve(y_hat, y)
-
-        # Update metrics
-        self.test_score_rooms.update(*rooms)
-        self.test_score_icons.update(*icons)
-
-        # Log sample
-        self._log_sample(*heats, *rooms, *icons, batch, batch_idx, "test/samples")
-
-        # Log test loss
-        self.losses["test"].append(self.loss_fn.get_loss())
-
-        # Return loss for logging
-        return loss
-
-    def on_train_epoch_end(self):
-        # Set stage to train
-        stage = "train"
-
-        # Calculate average training loss
-        self._log_losses(stage)
-        
-        # Reset training loss, and clear GPU memory
-        self.losses[stage] = []
-        torch.cuda.empty_cache()
-
-    def on_validation_epoch_end(self):
-        # Set stage to validation
-        stage = "val"
-
-        # Compute scores
-        rooms = self.val_score_rooms.compute(reset=True)
-        icons = self.val_score_icons.compute(reset=True)
-
-        # Log scores
-        self._log_scores(*rooms, stage, "room")
-        self._log_scores(*icons, stage, "icon")
-
-        # Calculate average validation loss
-        self._log_losses(stage)
-
-        # Reset validation loss, and clear GPU memory
-        self.losses[stage] = []
-        torch.cuda.empty_cache()
-
-    def on_test_epoch_end(self):
-        # Set stage to test
-        stage = "test"
-
-        # Calculate scores
-        rooms = self.test_score_rooms.compute()
-        icons = self.test_score_icons.compute()
-
-        # Log scores
-        self._log_scores(*rooms, stage, "room")
-        self._log_scores(*icons, stage, "icon")
-
-        # Calculate average test loss
-        self._log_losses(stage)
-
-        # Reset test loss, and clear GPU memory
-        self.losses[stage] = []
-        torch.cuda.empty_cache()

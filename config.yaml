@@ -1,21 +1,22 @@
 seed: 0
 wandb:
-  log: True
-  dir: /tudelft.net/staff-umbrella/StudentsCVlab/jlhofland
-  experiment_name: GRAY_100E_B20
+  log: False
+  dir: C:\Users\j.a.hofland\Documents\thesis-coding\pytorch-lightning-example\runs_new
+  experiment_name: TEST_MMD
   entity: hofland-jeroen
   project: cc5k
 debugger:
-  batches: False # number | False
+  batches: 5 # number | False
   profiler: SimpleProfiler # SimpleProfiler | AdvancedProfiler | False
-  dir: /home/nfs/jlhofland/debugging
+  dir: C:\Users\j.a.hofland\Documents\thesis-coding\pytorch-lightning-example\debugging
   accelerator: False
   batch_tuner: False
   anomaly: False
 model:
-  name: cubicasa
+  name: CubiCasa # CubiCasaMMD | CubiCasa | False
   input_slice: [21, 12, 11]
-  loss: uncertainty
+  loss: UncertaintyLoss # UncertaintyLoss | False
+  use_mmd: False
   weights: False # path | False
 optimizer:
   name: adam
@@ -24,10 +25,10 @@ optimizer:
   betas: [0.9, 0.999]
   patience: 10
 train:
-  batch_size: 20
+  batch_size: 8
   accumulate_grad_batches: 1 # effective batch size = accumulate_grad_batches * batch_size
   resume: False # path | False
-  max_epochs: 100
+  max_epochs: 1
   max_time:
     enable: False
     days: 0
@@ -41,20 +42,26 @@ train:
     test_batches: 50 # number | False
 dataset:
   name: cubicasa
-  num_workers: 8 # 10 (local) | 0.5 * cpus (cluster)
+  num_workers: 4 # 10 (local) | 0.5 * cpus (cluster)
   format: txt # lmdb or txt
   augmentations: True
   original_size: True
   persistent_workers: True
   pin_memory: True
   grayscale: True
-  load_ram: False
+  overwrite: False
   save_samples: False
   load_samples: True
   scale: True
   image_size: 256
   files:
-    root: /tudelft.net/staff-umbrella/StudentsCVlab/jlhofland
+    root: C:\Users\j.a.hofland\Documents\thesis-coding\pytorch-lightning-example\data\
     train: train_hqa_hq.txt
     val: val_hqa_hq.txt
-    test: test_c.txt
+    mmd:
+      train: train_c.txt
+      val: val_c.txt
+    test: 
+      d1: test_hqa.txt
+      d2: test_hq.txt
+      d3: test_c.txt

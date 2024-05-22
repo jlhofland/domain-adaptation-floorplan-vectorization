@@ -2,54 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from models import human_pose_estimation
-
-
-class Residual(nn.Module):
-    def __init__(self, numIn, numOut):
-        super(Residual, self).__init__()
-        self.numIn = numIn
-        self.numOut = numOut
-        self.bn = nn.BatchNorm2d(self.numIn)
-        self.relu = nn.ReLU(inplace=True)
-        self.conv1 = nn.Conv2d(self.numIn, int(
-            self.numOut / 2), bias=True, kernel_size=1)
-        self.bn1 = nn.BatchNorm2d(int(self.numOut / 2))
-        self.conv2 = nn.Conv2d(int(self.numOut / 2), int(self.numOut / 2),
-                               bias=True, kernel_size=3, stride=1, padding=1)
-        self.bn2 = nn.BatchNorm2d(int(self.numOut / 2))
-        self.conv3 = nn.Conv2d(int(self.numOut / 2),
-                               self.numOut, bias=True, kernel_size=1)
-
-        if self.numIn != self.numOut:
-            self.conv4 = nn.Conv2d(
-                self.numIn, self.numOut, bias=True, kernel_size=1)
-
-        for m in self.modules():
-            if isinstance(m, nn.Conv2d) or isinstance(m, nn.ConvTranspose2d):
-                nn.init.kaiming_normal_(
-                    m.weight, mode='fan_out', nonlinearity='relu')
-                nn.init.constant_(m.bias, 0)
-            elif isinstance(m, nn.BatchNorm2d):
-                nn.init.constant_(m.weight, 1)
-                nn.init.constant_(m.bias, 0)
-
-    def forward(self, x):
-        residual = x
-        out = self.bn(x)
-        out = self.relu(out)
-        out = self.conv1(out)
-        out = self.bn1(out)
-        out = self.relu(out)
-        out = self.conv2(out)
-        out = self.bn2(out)
-        out = self.relu(out)
-        out = self.conv3(out)
-
-        if self.numIn != self.numOut:
-            residual = self.conv4(x)
-
-        return out + residual
-
+from models.residual import Residual
 
 class CubiCasa(nn.Module):
     def __init__(self, classes):
@@ -84,8 +37,10 @@ class CubiCasa(nn.Module):
         self.r43_a = Residual(256, 256)
         self.r44_a = Residual(256, 512)
         self.r45_a = Residual(512, 512)
-        self.upsample4 = nn.ConvTranspose2d(512, 512, kernel_size=2, stride=2)
 
+        # Latent space reduction should be done here
+
+        self.upsample4 = nn.ConvTranspose2d(512, 512, kernel_size=2, stride=2)
         self.r41_b = Residual(256, 256)
         self.r42_b = Residual(256, 256)
         self.r43_b = Residual(256, 512)
@@ -130,7 +85,7 @@ class CubiCasa(nn.Module):
                 nn.init.constant_(m.weight, 1)
                 nn.init.constant_(m.bias, 0)
 
-    def forward(self, x):
+    def forward(self, x, return_latent=False, return_output=True):
         out = self.conv1_(x)
         out = self.bn1(out)
         out = self.relu1(out)
@@ -174,6 +129,10 @@ class CubiCasa(nn.Module):
         out4a = self.r44_a(out4a)
         out4a = self.r45_a(out4a)
 
+        # If we do not want the prediction, return the latent space
+        if not return_output:
+            return None, self.reduce_conv(out4a)
+
         out4b = self.r41_b(out3a)
         out4b = self.r42_b(out4b)
         out4b = self.r43_b(out4b)
@@ -201,9 +160,96 @@ class CubiCasa(nn.Module):
         out = self.relu3(out)
         out = self.conv4_(out)
         out = self.upsample(out)
+
         # heatmap channels go trough sigmoid
         out[:, :21] = self.sigmoid(out[:, :21])
-        return out
+
+        if return_latent:
+            return out, self.reduce_conv(out4a)
+        else:
+            return out, None
+
+    def get_latent(self, x):
+        # Input x shape: [batch_size, 3, H, W]
+        out = self.conv1_(x)
+        # Shape after conv1_: [batch_size, 64, H/2, W/2]
+        out = self.bn1(out)
+        out = self.relu1(out)
+        out = self.maxpool(out)
+        # Shape after maxpool: [batch_size, 64, H/4, W/4]
+        out = self.r01(out)
+        # Shape after r01: [batch_size, 128, H/4, W/4]
+        out = self.r02(out)
+        # Shape after r02: [batch_size, 128, H/4, W/4]
+        out = self.r03(out)
+        # Shape after r03: [batch_size, 128, H/4, W/4]
+        out = self.r04(out)
+        # Shape after r04: [batch_size, 256, H/4, W/4]
+
+        out1a = self.maxpool1(out)
+        # Shape after maxpool1: [batch_size, 256, H/8, W/8]
+        out1a = self.r11_a(out1a)
+        # Shape after r11_a: [batch_size, 256, H/8, W/8]
+        out1a = self.r12_a(out1a)
+        # Shape after r12_a: [batch_size, 256, H/8, W/8]
+        out1a = self.r13_a(out1a)
+        # Shape after r13_a: [batch_size, 256, H/8, W/8]
+
+        out1b = self.r11_b(out)
+        # Shape after r11_b: [batch_size, 256, H/4, W/4]
+        out1b = self.r12_b(out1b)
+        # Shape after r12_b: [batch_size, 256, H/4, W/4]
+        out1b = self.r13_b(out1b)
+        # Shape after r13_b: [batch_size, 256, H/4, W/4]
+
+        out2a = self.maxpool2(out1a)
+        # Shape after maxpool2: [batch_size, 256, H/16, W/16]
+        out2a = self.r21_a(out2a)
+        # Shape after r21_a: [batch_size, 256, H/16, W/16]
+        out2a = self.r22_a(out2a)
+        # Shape after r22_a: [batch_size, 256, H/16, W/16]
+        out2a = self.r23_a(out2a)
+        # Shape after r23_a: [batch_size, 256, H/16, W/16]
+
+        out2b = self.r21_b(out1a)
+        # Shape after r21_b: [batch_size, 256, H/8, W/8]
+        out2b = self.r22_b(out2b)
+        # Shape after r22_b: [batch_size, 256, H/8, W/8]
+        out2b = self.r23_b(out2b)
+        # Shape after r23_b: [batch_size, 256, H/8, W/8]
+
+        out3a = self.maxpool3(out2a)
+        # Shape after maxpool3: [batch_size, 256, H/32, W/32]
+        out3a = self.r31_a(out3a)
+        # Shape after r31_a: [batch_size, 256, H/32, W/32]
+        out3a = self.r32_a(out3a)
+        # Shape after r32_a: [batch_size, 256, H/32, W/32]
+        out3a = self.r33_a(out3a)
+        # Shape after r33_a: [batch_size, 256, H/32, W/32]
+
+        out3b = self.r31_b(out2a)
+        # Shape after r31_b: [batch_size, 256, H/16, W/16]
+        out3b = self.r32_b(out3b)
+        # Shape after r32_b: [batch_size, 256, H/16, W/16]
+        out3b = self.r33_b(out3b)
+        # Shape after r33_b: [batch_size, 256, H/16, W/16]
+
+        out4a = self.maxpool4(out3a)
+        # Shape after maxpool4: [batch_size, 256, H/64, W/64]
+        out4a = self.r41_a(out4a)
+        # Shape after r41_a: [batch_size, 256, H/64, W/64]
+        out4a = self.r42_a(out4a)
+        # Shape after r42_a: [batch_size, 256, H/64, W/64]
+        out4a = self.r43_a(out4a)
+        # Shape after r43_a: [batch_size, 256, H/64, W/64]
+        out4a = self.r44_a(out4a)
+        # Shape after r44_a: [batch_size, 512, H/64, W/64]
+        out4a = self.r45_a(out4a)
+        # Shape after r45_a: [batch_size, 512, H/64, W/64]
+
+        # Reduce dimensionality
+        return self.reduce_conv(out4a)  # [batch_size, 1, H/64, W/64]
+
 
     def _upsample_add(self, x, y):
         '''Upsample and add two feature maps.

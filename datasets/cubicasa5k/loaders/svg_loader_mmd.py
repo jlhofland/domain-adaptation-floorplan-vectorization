@@ -12,8 +12,8 @@ from functools import partial
 import os
 
 
-class FloorplanSVG(Dataset):
-    def __init__(self, source_list, cfg, target_list=None, is_transform=True, augmentations=None, img_norm=True, pre_load=False):
+class FloorplanSVGMMD(Dataset):
+    def __init__(self, source_list, target_list, cfg, is_transform=True, augmentations=None, img_norm=True, pre_load=False):
         # Parameters
         self.img_norm = img_norm
         self.is_transform = is_transform
@@ -27,7 +27,10 @@ class FloorplanSVG(Dataset):
         self.image_file_name = '/F1_scaled.png'
         self.org_image_file_name = '/F1_original.png'
         self.svg_file_name = '/model.svg'
-        self.folders = genfromtxt(self.data_folder + source_list, dtype='str')
+
+        # Load source and target lists
+        self.source_folders = genfromtxt(self.data_folder + source_list, dtype='str')
+        self.target_folders = genfromtxt(self.data_folder + target_list, dtype='str')
 
         # Set data file name (grayscale or RGB)
         if cfg.dataset.grayscale:
@@ -41,12 +44,12 @@ class FloorplanSVG(Dataset):
 
     def __len__(self):
         """__len__"""
-        return len(self.folders)
+        return len(self.source_folders)
 
     def __getitem__(self, index):
         # Load image with {image, label, folder, heatmaps, scale} dictionary
         if self.cfg.dataset.load_samples and self.pre_load:
-            sample = self.load_pkl(self.data_folder + self.folders[index] + self.data_file)
+            sample = self.load_pkl(self.data_folder + self.source_folders[index] + self.data_file)
         else:
             sample = self.get_data(index)
 
@@ -61,9 +64,9 @@ class FloorplanSVG(Dataset):
         # Return the sample
         return sample
     
-    def load_image(self, index, file_name):
+    def load_image(self, index, folder, file_name):
         # Load image
-        image = cv2.imread(self.data_folder + self.folders[index] + file_name)
+        image = cv2.imread(self.data_folder + folder[index] + file_name)
 
         if (self.cfg.dataset.grayscale):
             # Convert to grayscale
@@ -82,14 +85,30 @@ class FloorplanSVG(Dataset):
         fplan = np.moveaxis(image, -1, 0)
 
         # Return the image with (C, H, W) format
-        return fplan, height, width, nchannel
+        return fplan, image, height, width, nchannel
 
     def get_txt(self, index):
-        # Load image
-        fp, h, w, c = self.load_image(index, self.image_file_name)
+        # Load image: (C, H, W), height, width, nchannel
+        fps, ims, hs, ws, cs = self.load_image(index, self.source_folders, self.image_file_name)
+
+        # Shuffle target list (to get random first target image)
+        np.random.shuffle(self.target_folders)
+
+        # I want to loop over the target images and check if the aspect ratio is approximately the same
+        # If it is, I will use that image as the target image
+        for i in range(len(self.target_folders)):
+            fpt, imt, ht, wt, ct = self.load_image(i, self.target_folders, self.image_file_name)
+
+            # Calculate aspect ratio
+            aspect_ratio = float(hs) / float(ws)
+            target_aspect_ratio = float(ht) / float(wt)
+
+            # If aspect ratio is approximately the same, break the loop
+            if abs(aspect_ratio - target_aspect_ratio) < 0.1:
+                break
 
         # Getting labels for segmentation and heatmaps
-        house = House(self.data_folder + self.folders[index] + self.svg_file_name, h, w)
+        house = House(self.data_folder + self.source_folders[index] + self.svg_file_name, hs, ws)
         
         # Combining them to one numpy tensor
         label = torch.tensor(house.get_segmentation_tensor().astype(np.float32))
@@ -98,36 +117,50 @@ class FloorplanSVG(Dataset):
 
         # If original size is set, resize the label to the original size
         if self.cfg.dataset.original_size:
-            fp, h_org, w_org, c_org = self.load_image(index, self.org_image_file_name)
+            fps, ims_org, hs_org, ws_org, cs_org = self.load_image(index, self.source_folders, self.org_image_file_name)
+            fpt, imt, ht, wt, ct = self.load_image(i, self.target_folders, self.org_image_file_name)
 
             # Resize the label to the original size
             label = label.unsqueeze(0)
-            label = torch.nn.functional.interpolate(label,size=(h_org, w_org),mode='nearest')
+            label = torch.nn.functional.interpolate(label,size=(hs_org, ws_org),mode='nearest')
             label = label.squeeze(0)
 
             # Calculate the scaling factor
-            coef_height = float(h_org) / float(h)
-            coef_width = float(w_org) / float(w)
+            coef_height = float(hs_org) / float(hs)
+            coef_width = float(ws_org) / float(ws)
 
             # Resize the heatmaps
             for key, value in heatmaps.items():
                 heatmaps[key] = [(int(round(x*coef_width)), int(round(y*coef_height))) for x, y in value]
 
+            # I want to resize fpt to the size of fps
+            fpt = cv2.resize(imt, (ws_org, hs_org), interpolation=cv2.INTER_CUBIC)
+        else: 
+            # I want to resize fpt to the size of fps
+            fpt = cv2.resize(imt, (ws, hs), interpolation=cv2.INTER_CUBIC)
+
+        # Expand dimensions and move channels to first dimension (H, W, C) -> (C, H, W)
+        fpt = np.expand_dims(fpt, axis=-1)
+        fpt = np.moveaxis(fpt, -1, 0)
+
         # Convert to tensor
-        img = torch.tensor(fp.astype(np.float32))
+        source_image = torch.tensor(fps.astype(np.float32))
+        target_image = torch.tensor(fpt.astype(np.float32))
 
         # Return dictionary
         return {
-            'image': img, 
+            'image': source_image,
             'label': label, 
-            'folder': self.folders[index],
+            'folder': self.source_folders[index],
             'heatmaps': heatmaps, 
-            'scale': coef_width
+            'scale': coef_width,
+            'target': target_image
         }
 
     def transform(self, sample):
         # Normalization values to range -1 and 1
         sample['image'] = 2 * (sample['image'] / 255.0) - 1
+        sample['target'] = 2 * (sample['target'] / 255.0) - 1
 
         # Return the sample
         return sample
@@ -143,9 +176,9 @@ class FloorplanSVG(Dataset):
 
     def samples_to_pickle(self):
         print('Saving samples to pickle files...')
-        for i, f in tqdm(enumerate(self.folders), total=len(self.folders)):
+        for i, f in tqdm(enumerate(self.source_folders), total=len(self.source_folders)):
             # If exists, skip
-            if os.path.exists(self.data_folder + f + self.data_file):
+            if os.path.exists(self.data_folder + f + self.data_file) and not self.cfg.dataset.overwrite:
                 continue
 
             # Get sample and save to pickle file
@@ -155,7 +188,7 @@ class FloorplanSVG(Dataset):
 
     def save_sample_to_pkl(self, index, get_txt_func, save_pkl_func, data_folder, folders):
         # If exists, skip
-        if os.path.exists(data_folder + folders[index] + self.data_file):
+        if os.path.exists(data_folder + folders[index] + self.data_file) and not self.cfg.dataset.overwrite:
             return
         sample = get_txt_func(index)
         save_pkl_func(sample, data_folder + folders[index] + self.data_file)
@@ -167,11 +200,11 @@ class FloorplanSVG(Dataset):
         with multiprocessing.Pool(processes=self.cfg.dataset.num_workers) as pool:
             # Use partial to pass additional arguments to the save_sample_to_pkl function
             save_partial = partial(self.save_sample_to_pkl, get_txt_func=self.get_txt, save_pkl_func=self.save_pkl,
-                                data_folder=self.data_folder, folders=self.folders)
+                                data_folder=self.data_folder, folders=self.source_folders)
             
             # Use tqdm to track progress
-            with tqdm(total=len(self.folders)) as pbar:
-                for _ in pool.imap_unordered(save_partial, range(len(self.folders))):
+            with tqdm(total=len(self.source_folders)) as pbar:
+                for _ in pool.imap_unordered(save_partial, range(len(self.source_folders))):
                     pbar.update(1)
         
         print('Samples saved to pickle files.')
