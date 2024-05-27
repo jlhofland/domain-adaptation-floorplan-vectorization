@@ -58,7 +58,9 @@ def main():
 
     # Add labels to the logger
     labels = {
-        "loss": ['all', 'rooms', 'icons', 'heatmap', 'all_var', 'rooms_var', 'icons_var', 'heatmap_var'],
+        "loss": ['all', 'rooms', 'icons', 'heatmap', 'mmd'],
+        "weighted_loss": ['all', 'rooms', 'icons', 'heatmap', 'mmd'],
+        "weights": ['rooms', 'icons', 'heatmap'],
         "room": ["Background", "Outdoor", "Wall", "Kitchen", "Living Room" ,"Bed Room", "Bath", "Entry", "Railing", "Storage", "Garage", "Undefined"],
         "icon": ["No Icon", "Window", "Door", "Closet", "Electrical Applience" ,"Toilet", "Sink", "Sauna Bench", "Fire Place", "Bathtub", "Chimney"],
         "heat": ["I-UP", "I-RIGHT", "I-DOWN", "I-LEFT", # I junctions
@@ -68,6 +70,10 @@ def main():
                  "O-UP", "O-RIGHT", "O-DOWN", "O-LEFT", # O(pening) junctions
                  "ICON-UP-RIGHT", "ICON-RIGHT-DOWN", "ICON-DOWN-LEFT", "ICON-LEFT-UP"] # ICON junctions
     }
+
+    # Add MMD to weight labels
+    if cfg.model.use_mmd:
+        labels["weights"].append("mmd")
 
     # Create loss function
     loss_fn = loss_factory.factory(cfg)
@@ -117,23 +123,29 @@ def main():
         profiler=eval(cfg.debugger.profiler)(dirpath=cfg.debugger.dir+"/profiler", filename=cfg.wandb.experiment_name) if cfg.debugger.profiler else None,
         callbacks=[
             # DeviceStatsMonitor(cpu_stats=True) if cfg.debugger.accelerator else None,
-            ModelCheckpoint(monitor="val/loss/all_var", mode="min", save_top_k=1)
+            ModelCheckpoint(monitor="val/weighted_loss/mmd", mode="min", save_top_k=1)
         ]
     )
 
-    # Scale batch size using PyTorch Lightning's Tuner
-    if cfg.debugger.batch_tuner:
-        tuner = Tuner(trainer)
-        tuner.scale_batch_size(runner, datamodule=dataset)
+    # Train the model
+    if not cfg.test.weights:
+        # Scale batch size using PyTorch Lightning's Tuner
+        if cfg.debugger.batch_tuner:
+            tuner = Tuner(trainer)
+            tuner.scale_batch_size(runner, datamodule=dataset)
 
-    # # Train and validate from scratch or resume from checkpoint
-    if cfg.train.resume and os.path.exists(cfg.train.resume):
-        trainer.fit(runner, datamodule=dataset, ckpt_path=cfg.train.resume)
+        # # Train and validate from scratch or resume from checkpoint
+        if cfg.train.resume and os.path.exists(cfg.train.resume):
+            trainer.fit(runner, datamodule=dataset, ckpt_path=cfg.train.resume)
+        else:
+            trainer.fit(runner, datamodule=dataset)
+
+        # Test colored images
+        trainer.test(runner, dataset.test_dataloader(cfg.dataset.files.test.d3))
     else:
-        trainer.fit(runner, datamodule=dataset)
+        # Test the model
+        trainer.test(runner, dataset.test_dataloader(cfg.test.data), ckpt_path=cfg.test.weights)
 
-    # Test colored images
-    trainer.test(runner, dataset.test_dataloader(cfg.dataset.files.test.d3))
 
 if __name__ == '__main__':
     # Ignore UserWarning related to libpng

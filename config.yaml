@@ -1,12 +1,12 @@
 seed: 0
 wandb:
-  log: False
+  log: True
   dir: C:\Users\j.a.hofland\Documents\thesis-coding\pytorch-lightning-example\runs_new
-  experiment_name: TEST_MMD
+  experiment_name: TEST_METRICS
   entity: hofland-jeroen
   project: cc5k
 debugger:
-  batches: 5 # number | False
+  batches: False # number | False
   profiler: SimpleProfiler # SimpleProfiler | AdvancedProfiler | False
   dir: C:\Users\j.a.hofland\Documents\thesis-coding\pytorch-lightning-example\debugging
   accelerator: False
@@ -16,7 +16,7 @@ model:
   name: CubiCasa # CubiCasaMMD | CubiCasa | False
   input_slice: [21, 12, 11]
   loss: UncertaintyLoss # UncertaintyLoss | False
-  use_mmd: False
+  use_mmd: True
   weights: False # path | False
 optimizer:
   name: adam
@@ -28,7 +28,7 @@ train:
   batch_size: 8
   accumulate_grad_batches: 1 # effective batch size = accumulate_grad_batches * batch_size
   resume: False # path | False
-  max_epochs: 1
+  max_epochs: 2
   max_time:
     enable: False
     days: 0
@@ -40,6 +40,9 @@ train:
     train_batches: 50 # number | False
     val_batches: 50 # number | False
     test_batches: 50 # number | False
+test:
+  weights: False # path | False
+  data: test_hqa.txt
 dataset:
   name: cubicasa
   num_workers: 4 # 10 (local) | 0.5 * cpus (cluster)
@@ -48,7 +51,7 @@ dataset:
   original_size: True
   persistent_workers: True
   pin_memory: True
-  grayscale: True
+  grayscale: False
   overwrite: False
   save_samples: False
   load_samples: True

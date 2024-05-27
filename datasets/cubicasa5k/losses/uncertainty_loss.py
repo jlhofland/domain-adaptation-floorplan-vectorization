@@ -51,6 +51,8 @@ class UncertaintyLoss(Module):
         self.loss_icons = None
         self.loss_heatmap = None
         self.loss_mmd = 0
+
+        # Init mmd uncertainty with 0 if not used
         self.loss_mmd_var = 0
 
         # Mask, sub, and cuda
@@ -100,14 +102,14 @@ class UncertaintyLoss(Module):
         # Calculate the MMD loss if provided
         if self.use_mmd and source_latent is not None and target_latent is not None:
             # Calculate tensor sizes (batch_size, channels, height, width)
-            ns, cs, hs, ws = source_latent.size()
-            nt, ct, ht, wt = target_latent.size()
+            # ns, cs, hs, ws = source_latent.size()
+            # nt, ct, ht, wt = target_latent.size()
 
             # Resize target_latent to match source_latent
-            if hs != ht or ws != wt:  
-                target_latent = target_latent.unsqueeze(1)
-                target_latent = interpolate(target_latent, size=(ct, hs, ws), mode='nearest')
-                target_latent = target_latent.squeeze(1)
+            # if hs != ht or ws != wt:  
+            #     target_latent = target_latent.unsqueeze(1)
+            #     target_latent = interpolate(target_latent, size=(ct, hs, ws), mode='nearest')
+            #     target_latent = target_latent.squeeze(1)
 
             # Flatten the feature maps to use in MMD
             # [batch_size, C, H/64, W/64] --> [batch_size, C*H/64*W/64]
@@ -171,13 +173,30 @@ class UncertaintyLoss(Module):
             self.loss_rooms,
             self.loss_icons,
             self.loss_heatmap,
+            self.loss_mmd,
+        ]
+
+        uncertainty_loss = [
             self.loss_var,
             self.loss_rooms_var,
             self.loss_icons_var,
             self.loss_heatmap_var,
-            self.loss_mmd,       # Include MMD loss in the list of loss values
-            self.loss_mmd_var    # Include MMD variance loss in the list of loss values
+            self.loss_mmd_var
         ]
 
+        # List of loss parameters
+        loss_params = [self.log_vars[0], self.log_vars[1], self.log_vars_mse] # rooms, icons, heatmaps uncertainty parameters
+        
+        # Include MMD loss parameter in the list of loss parameters
+        if self.use_mmd:
+            loss_params.append(self.log_vars[2]) # MMD uncertainty parameter
+
+        # Map torch.exp(-val) to the list of loss parameters
+        loss_params = [torch.exp(-val) for val in loss_params]
+
+        # Sum weights of heatmaps
+        loss_params[2] = loss_params[2].sum()
+
         # Convert the list of loss values to a tensor
-        return torch.tensor(loss_values)
+        return torch.tensor(loss_values), torch.tensor(uncertainty_loss), torch.tensor(loss_params)
+

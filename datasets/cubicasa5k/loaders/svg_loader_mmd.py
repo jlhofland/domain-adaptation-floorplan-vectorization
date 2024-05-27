@@ -139,8 +139,11 @@ class FloorplanSVGMMD(Dataset):
             # I want to resize fpt to the size of fps
             fpt = cv2.resize(imt, (ws, hs), interpolation=cv2.INTER_CUBIC)
 
-        # Expand dimensions and move channels to first dimension (H, W, C) -> (C, H, W)
-        fpt = np.expand_dims(fpt, axis=-1)
+        # expand dimensions if grayscale
+        if self.cfg.dataset.grayscale:
+            fpt = np.expand_dims(fpt, axis=-1)
+
+        # Move channels to first dimension (H, W, C) -> (C, H, W)
         fpt = np.moveaxis(fpt, -1, 0)
 
         # Convert to tensor

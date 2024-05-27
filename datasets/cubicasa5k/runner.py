@@ -19,9 +19,21 @@ class Runner(pl.LightningModule):
 
         # Losses for logging
         self.losses = {
-            "train": [],
-            "val": [],
-            "test": [],
+            "loss": {
+                "train": [],
+                "val": [],
+                "test": [],
+            }, 
+            "weighted_loss": {
+                "train": [],
+                "val": [],
+                "test": [],
+            },
+            "weights": {
+                "train": [],
+                "val": [],
+                "test": [],
+            },
         }
 
         # Validation scores
@@ -56,7 +68,7 @@ class Runner(pl.LightningModule):
             "lr_scheduler": {
                 "scheduler": scheduler,
                 "interval": "epoch", 
-                "monitor": "val/loss/all_var", # Monitor the total loss with variance
+                "monitor": "val/weighted_loss/all", # Monitor the total loss with variance
                 "frequency": 1, 
             },
         }
@@ -93,6 +105,9 @@ class Runner(pl.LightningModule):
         # Select rooms and icons from the prediction
         # y_hat = [batch_size, [heatmaps, rooms, icons], height, width] = [1, [21, 13, 17], H, W]
         heats_pred, rooms_pred, icons_pred = torch.split(y_hat[0], tuple(self.cfg.model.input_slice), dim=0)
+
+        # Filter out the heatmaps with > 0.8 confidence
+        heats_pred = heats_pred * (heats_pred > 0.8)
         
         # Take the argmax of the rooms and icons
         heats_pred_max = torch.argmax(heats_pred, dim=0)
@@ -123,8 +138,13 @@ class Runner(pl.LightningModule):
         # Forward pass
         loss, _, _ = self._step(batch)
 
+        # Retrieve losses
+        losses, weighted_losses, weights = self.loss_fn.get_loss()
+
         # Log step-level loss, then append to list for epoch-level loss
-        self.losses["train"].append(self.loss_fn.get_loss())
+        self.losses["loss"]["train"].append(losses)
+        self.losses["weighted_loss"]["train"].append(weighted_losses)
+        self.losses["weights"]["train"].append(weights)
 
         # Return loss for logging
         return loss
@@ -144,8 +164,13 @@ class Runner(pl.LightningModule):
         if batch_idx < 1:
             self._log_sample(*heats, *rooms, *icons, batch, batch_idx, "val/samples")
 
+        # Get losses and weights
+        losses, weighted_losses, weights = self.loss_fn.get_loss()
+
         # Log step-level loss, then append to list for epoch-level loss
-        self.losses["val"].append(self.loss_fn.get_loss())
+        self.losses["loss"]["val"].append(losses)
+        self.losses["weighted_loss"]["val"].append(weighted_losses)
+        self.losses["weights"]["val"].append(weights)
 
         # Return loss for logging
         return loss
@@ -164,8 +189,13 @@ class Runner(pl.LightningModule):
         # Log sample
         self._log_sample(*heats, *rooms, *icons, batch, batch_idx, "test/samples")
 
+        # Get losses and weights
+        losses, weighted_losses, weights = self.loss_fn.get_loss()
+
         # Log test loss
-        self.losses["test"].append(self.loss_fn.get_loss())
+        self.losses["loss"]["test"].append(losses)
+        self.losses["weighted_loss"]["test"].append(weighted_losses)
+        self.losses["weights"]["test"].append(weights)
 
         # Return loss for logging
         return loss
@@ -180,10 +210,11 @@ class Runner(pl.LightningModule):
         stage = "train"
 
         # Calculate average training loss
-        self._log_losses(stage)
+        for type in ["loss", "weighted_loss", "weights"]:
+            self._log_weighted_loss(stage, type)
+            self.losses[type][stage] = []
         
         # Reset training loss, and clear GPU memory
-        self.losses[stage] = []
         torch.cuda.empty_cache()
 
     def on_validation_epoch_end(self):
@@ -199,10 +230,11 @@ class Runner(pl.LightningModule):
         self._log_scores(*icons, stage, "icon")
 
         # Calculate average validation loss
-        self._log_losses(stage)
+        for type in ["loss", "weighted_loss", "weights"]:
+            self._log_weighted_loss(stage, type)
+            self.losses[type][stage] = []
 
         # Reset validation loss, and clear GPU memory
-        self.losses[stage] = []
         torch.cuda.empty_cache()
 
     def on_test_epoch_end(self):
@@ -218,10 +250,11 @@ class Runner(pl.LightningModule):
         self._log_scores(*icons, stage, "icon")
 
         # Calculate average test loss
-        self._log_losses(stage)
+        for type in ["loss", "weighted_loss", "weights"]:
+            self._log_weighted_loss(stage, type)
+            self.losses[type][stage] = []
 
         # Reset test loss, and clear GPU memory
-        self.losses[stage] = []
         torch.cuda.empty_cache()
 
     ##############################
@@ -239,14 +272,14 @@ class Runner(pl.LightningModule):
             for cls, value in dict.items():
                 self.log(f"{stage}/{group}/{metric}/{cls} {self.labels[group][int(cls)]}", value)
 
-    def _log_losses(self, stage):
+    def _log_weighted_loss(self, stage, type):
         # Stack losses and calculate average
-        losses_s = torch.stack(self.losses[stage], dim=0)
-        losses_m = torch.mean(losses_s, dim=0)
+        stacked = torch.stack(self.losses[type][stage], dim=0)
+        average = torch.mean(stacked, dim=0)
 
-        # Log average losses for each label
-        for i, label in enumerate(self.labels["loss"]):
-            self.log(f"{stage}/loss/{label}", losses_m[i])
+        # Log average losses/weights for each label
+        for i, label in enumerate(self.labels[type]):
+            self.log(f"{stage}/{type}/{label}", average[i])
 
     def _log_sample(self, heats_pred, heats_label, rooms_pred, rooms_label, icons_pred, icons_label, batch, batch_idx, stage):
         # Create class labels

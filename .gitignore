@@ -169,3 +169,6 @@ runs_new
 .vscode
 cache
 pytorch-lightning-example
+
+# Ignore ckpt files in weights folder
+weights/*.ckpt

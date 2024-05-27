@@ -131,7 +131,7 @@ class CubiCasa(nn.Module):
 
         # If we do not want the prediction, return the latent space
         if not return_output:
-            return None, self.reduce_conv(out4a)
+            return None, out4a.mean(dim=1, keepdim=True)
 
         out4b = self.r41_b(out3a)
         out4b = self.r42_b(out4b)
@@ -165,7 +165,7 @@ class CubiCasa(nn.Module):
         out[:, :21] = self.sigmoid(out[:, :21])
 
         if return_latent:
-            return out, self.reduce_conv(out4a)
+            return out, out4a.mean(dim=1, keepdim=True)
         else:
             return out, None
 
