@@ -6,7 +6,7 @@ wandb:
   entity: hofland-jeroen
   project: cc5k
 debugger:
-  batches: False # number | False
+  batches: 5 # number | False
   profiler: SimpleProfiler # SimpleProfiler | AdvancedProfiler | False
   dir: C:\Users\j.a.hofland\Documents\thesis-coding\pytorch-lightning-example\debugging
   accelerator: False
@@ -58,7 +58,7 @@ dataset:
   load_samples: True
   scale: True
   image_size: 256
-  val_size: 1024
+  val_size: 512
   files:
     root: C:\Users\j.a.hofland\Documents\thesis-coding\pytorch-lightning-example\data\
     train: train_hqa_hq.txt

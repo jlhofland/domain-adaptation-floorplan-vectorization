@@ -33,6 +33,7 @@ class CubiCasa5K(pl.LightningDataModule):
 
         # Get image size
         size = (cfg.dataset.image_size, cfg.dataset.image_size)
+        vals = (cfg.dataset.val_size, cfg.dataset.val_size)
 
         # Set scaling and cropping augmentations
         scale_augmentations = RandomChoice([
@@ -49,7 +50,7 @@ class CubiCasa5K(pl.LightningDataModule):
         ]) if cfg.dataset.augmentations else self.dict_tensor()
 
         self.val_augmentations = Compose([
-            self.resize_padded((0, 0), data_format='dict', size=cfg.dataset.val_size),
+            self.resize_padded((0, 0), data_format='dict', size=vals),
             self.dict_tensor()
         ]) if cfg.dataset.val_size else self.dict_tensor()
 
