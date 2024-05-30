@@ -19,21 +19,9 @@ class Runner(pl.LightningModule):
 
         # Losses for logging
         self.losses = {
-            "loss": {
-                "train": [],
-                "val": [],
-                "test": [],
-            }, 
-            "weighted_loss": {
-                "train": [],
-                "val": [],
-                "test": [],
-            },
-            "weights": {
-                "train": [],
-                "val": [],
-                "test": [],
-            },
+            "train": [],
+            "val": [],
+            "test": [],
         }
 
         # Validation scores
@@ -68,7 +56,7 @@ class Runner(pl.LightningModule):
             "lr_scheduler": {
                 "scheduler": scheduler,
                 "interval": "epoch", 
-                "monitor": "val/weighted_loss/all", # Monitor the total loss with variance
+                "monitor": "val/loss/all/uncertainty", # Monitor the total loss with variance
                 "frequency": 1, 
             },
         }
@@ -107,7 +95,7 @@ class Runner(pl.LightningModule):
         heats_pred, rooms_pred, icons_pred = torch.split(y_hat[0], tuple(self.cfg.model.input_slice), dim=0)
 
         # Filter out the heatmaps with > 0.8 confidence
-        heats_pred = heats_pred * (heats_pred > 0.8)
+        heats_pred = heats_pred * (heats_pred > 0.5)
         
         # Take the argmax of the rooms and icons
         heats_pred_max = torch.argmax(heats_pred, dim=0)
@@ -122,11 +110,37 @@ class Runner(pl.LightningModule):
         rooms_label = y[0, self.cfg.model.input_slice[0]]
         icons_label = y[0, self.cfg.model.input_slice[0]+1]
 
-        # Take the argmax of heatmaps
-        # heats_label = y[0, :self.cfg.model.input_slice[0]]
-        # heats_label = torch.argmax(heats_label, dim=0)
-
         # Return the predictions and labels
+        return (heats_pred_max, None), (rooms_pred_max, rooms_label), (icons_pred_max, icons_label)
+
+    def _retrieve_batch(self, y_hat, y):
+        # Assume y_hat and y have shapes:
+        # y_hat = [batch_size, channels, height, width]
+        # y = [batch_size, channels, height, width] but different channel arrangement
+
+        # Split based on the configured slices
+        input_slices = tuple(self.cfg.model.input_slice)
+        heats_pred, rooms_pred, icons_pred = torch.split(y_hat, input_slices, dim=1)
+
+        # Filter out the heatmaps with > 0.5 confidence across all batches
+        heats_pred = heats_pred * (heats_pred > 0.5)
+
+        # Take the argmax of the rooms and icons across channel dimensions
+        heats_pred_max = torch.argmax(heats_pred, dim=1)
+        rooms_pred_max = torch.argmax(rooms_pred, dim=1)
+        icons_pred_max = torch.argmax(icons_pred, dim=1)
+
+        # Resize y to match y_hat dimensions, applying interpolation across the batch
+        y_resized = F.interpolate(y, size=y_hat.shape[2:], mode='bilinear', align_corners=False)
+
+        # Extract rooms and icons labels using the specified slices
+        rooms_label = y_resized[:, self.cfg.model.input_slice[0], :, :]
+        icons_label = y_resized[:, self.cfg.model.input_slice[0]+1, :, :]
+
+        # Return predictions and labels for heats, rooms, and icons
+        # Here we return tuples for each category where:
+        # - The first element of the tuple is the prediction map
+        # - The second element of the tuple is the ground truth label map
         return (heats_pred_max, None), (rooms_pred_max, rooms_label), (icons_pred_max, icons_label)
 
     ##############################
@@ -138,13 +152,8 @@ class Runner(pl.LightningModule):
         # Forward pass
         loss, _, _ = self._step(batch)
 
-        # Retrieve losses
-        losses, weighted_losses, weights = self.loss_fn.get_loss()
-
         # Log step-level loss, then append to list for epoch-level loss
-        self.losses["loss"]["train"].append(losses)
-        self.losses["weighted_loss"]["train"].append(weighted_losses)
-        self.losses["weights"]["train"].append(weights)
+        self.losses["train"].append(self.loss_fn.get_loss())
 
         # Return loss for logging
         return loss
@@ -154,23 +163,21 @@ class Runner(pl.LightningModule):
         loss, y_hat, y = self._step(batch)
 
         # Retrieve predictions and labels for both rooms and icons
-        heats, rooms, icons = self._retrieve(y_hat, y)
+        heats, rooms, icons = self._retrieve_batch(y_hat, y)
 
         # Update metrics
         self.val_score_rooms.update(*rooms)
         self.val_score_icons.update(*icons)
 
-        # Log sample
-        if batch_idx < 1:
-            self._log_sample(*heats, *rooms, *icons, batch, batch_idx, "val/samples")
+        # Get losses
+        losses = self.loss_fn.get_loss()
+
+        # For lenth of batch, log sample
+        for i in range(3) if batch_idx < 1 else []:
+            self._log_sample(*heats, *rooms, *icons, batch, i, "val/samples", losses)
 
         # Get losses and weights
-        losses, weighted_losses, weights = self.loss_fn.get_loss()
-
-        # Log step-level loss, then append to list for epoch-level loss
-        self.losses["loss"]["val"].append(losses)
-        self.losses["weighted_loss"]["val"].append(weighted_losses)
-        self.losses["weights"]["val"].append(weights)
+        self.losses["val"].append(losses)
 
         # Return loss for logging
         return loss
@@ -180,22 +187,21 @@ class Runner(pl.LightningModule):
         loss, y_hat, y = self._step(batch)
 
         # Retrieve predictions and labels
-        heats, rooms, icons = self._retrieve(y_hat, y)
+        heats, rooms, icons = self._retrieve_batch(y_hat, y)
 
         # Update metrics
         self.test_score_rooms.update(*rooms)
         self.test_score_icons.update(*icons)
 
-        # Log sample
-        self._log_sample(*heats, *rooms, *icons, batch, batch_idx, "test/samples")
+        # Get losses
+        losses = self.loss_fn.get_loss()
+
+        # For lenth of batch, log sample
+        for i in range(batch['image'].shape[0]):
+            self._log_sample(*heats, *rooms, *icons, batch, i, "test/samples", losses)
 
         # Get losses and weights
-        losses, weighted_losses, weights = self.loss_fn.get_loss()
-
-        # Log test loss
-        self.losses["loss"]["test"].append(losses)
-        self.losses["weighted_loss"]["test"].append(weighted_losses)
-        self.losses["weights"]["test"].append(weights)
+        self.losses["test"].append(losses)
 
         # Return loss for logging
         return loss
@@ -209,10 +215,8 @@ class Runner(pl.LightningModule):
         # Set stage to train
         stage = "train"
 
-        # Calculate average training loss
-        for type in ["loss", "weighted_loss", "weights"]:
-            self._log_weighted_loss(stage, type)
-            self.losses[type][stage] = []
+        # Log loss
+        self._log_loss(stage)
         
         # Reset training loss, and clear GPU memory
         torch.cuda.empty_cache()
@@ -225,14 +229,10 @@ class Runner(pl.LightningModule):
         rooms = self.val_score_rooms.compute(reset=True)
         icons = self.val_score_icons.compute(reset=True)
 
-        # Log scores
+        # Log scores and loss
+        self._log_loss(stage)
         self._log_scores(*rooms, stage, "room")
         self._log_scores(*icons, stage, "icon")
-
-        # Calculate average validation loss
-        for type in ["loss", "weighted_loss", "weights"]:
-            self._log_weighted_loss(stage, type)
-            self.losses[type][stage] = []
 
         # Reset validation loss, and clear GPU memory
         torch.cuda.empty_cache()
@@ -245,14 +245,10 @@ class Runner(pl.LightningModule):
         rooms = self.test_score_rooms.compute()
         icons = self.test_score_icons.compute()
 
-        # Log scores
+        # Log loss and scores
+        self._log_loss(stage)
         self._log_scores(*rooms, stage, "room")
         self._log_scores(*icons, stage, "icon")
-
-        # Calculate average test loss
-        for type in ["loss", "weighted_loss", "weights"]:
-            self._log_weighted_loss(stage, type)
-            self.losses[type][stage] = []
 
         # Reset test loss, and clear GPU memory
         torch.cuda.empty_cache()
@@ -272,66 +268,48 @@ class Runner(pl.LightningModule):
             for cls, value in dict.items():
                 self.log(f"{stage}/{group}/{metric}/{cls} {self.labels[group][int(cls)]}", value)
 
-    def _log_weighted_loss(self, stage, type):
+    def _log_loss(self, stage):
         # Stack losses and calculate average
-        stacked = torch.stack(self.losses[type][stage], dim=0)
+        stacked = torch.stack(self.losses[stage], dim=0)
         average = torch.mean(stacked, dim=0)
 
-        # Log average losses/weights for each label
-        for i, label in enumerate(self.labels[type]):
-            self.log(f"{stage}/{type}/{label}", average[i])
+        # Zip labels["loss"] and average to log
+        self.log_dict({stage + "/" + metric: value for metric, value in zip(self.labels["loss"], average)})
 
-    def _log_sample(self, heats_pred, heats_label, rooms_pred, rooms_label, icons_pred, icons_label, batch, batch_idx, stage):
+        # Reset losses
+        self.losses[stage] = []
+
+    def _log_sample(self, heats_pred, heats_label, rooms_pred, rooms_label, icons_pred, icons_label, batch, id, stage, ls):
         # Create class labels
         class_heats = {index: value for index, value in enumerate(self.labels["heat"])}
         class_rooms = {index: value for index, value in enumerate(self.labels["room"])}
         class_icons = {index: value for index, value in enumerate(self.labels["icon"])}
 
-        if (self.cfg.train.debug.print):
-            # Print shapes
-            print("heats_pred", heats_pred.shape)
-            # print("heats_label", heats_label.shape)
-
-            print("rooms_pred", rooms_pred.shape)
-            print("rooms_label", rooms_label.shape)
-
-            print("icons_pred", icons_pred.shape)
-            print("icons_label", icons_label.shape)
-
-            # print unique values
-            print("heats_pred unique", torch.unique(heats_pred))
-            # print("heats_label unique", torch.unique(heats_label))
-
-            print("rooms_pred unique", torch.unique(rooms_pred))
-            print("rooms_label unique", torch.unique(rooms_label))
-
-            print("icons_pred unique", torch.unique(icons_pred))
-            print("icons_label unique", torch.unique(icons_label))
+        image = wandb.Image(
+            batch['image'][id], 
+            caption=f"L: {ls[1]:.2f},  R: {ls[3]:.2f}, I: {ls[6]:.2f}, H: {ls[9]:.2f} M: {ls[11]:.2f}",
+            masks={
+                "room_predictions": {
+                    "mask_data": rooms_pred[id].cpu().detach().numpy(),
+                    "class_labels": class_rooms
+                },
+                "icon_predictions": {
+                    "mask_data": icons_pred[id].cpu().detach().numpy(),
+                    "class_labels": class_icons
+                },
+                "heat_predictions": {
+                    "mask_data": heats_pred[id].cpu().detach().numpy(),
+                    "class_labels": class_heats
+                },
+                "room_label": {
+                    "mask_data": rooms_label[id].cpu().detach().numpy(),
+                    "class_labels": class_rooms
+                },
+                "icon_label": {
+                    "mask_data": icons_label[id].cpu().detach().numpy(),
+                    "class_labels": class_icons
+                }
+        })
 
         # Log room segmentation
-        self.logger.experiment.log({f"{stage}/sample {batch_idx}": wandb.Image(batch['image'][0], masks={
-            "heat_predictions": {
-                "mask_data": heats_pred.cpu().detach().numpy(),
-                "class_labels": class_heats
-            },
-            # "heat_label": {
-            #     "mask_data": heats_label.cpu().detach().numpy(),
-            #     "class_labels": class_heats
-            # },
-            "room_predictions": {
-                "mask_data": rooms_pred.cpu().detach().numpy(),
-                "class_labels": class_rooms
-            },
-            "room_label": {
-                "mask_data": rooms_label.cpu().detach().numpy(),
-                "class_labels": class_rooms
-            },
-            "icon_predictions": {
-                "mask_data": icons_pred.cpu().detach().numpy(),
-                "class_labels": class_icons
-            },
-            "icon_label": {
-                "mask_data": icons_label.cpu().detach().numpy(),
-                "class_labels": class_icons
-            }
-        })})
+        self.logger.experiment.log({f"{stage}/sample {id}": image})

@@ -9,7 +9,7 @@ class CustomMetric(tm.Metric):
         self.add_state("confusion_matrix", default=torch.zeros((n_classes, n_classes), dtype=torch.long), dist_reduce_fx="sum")
         self.n_classes = n_classes
 
-    def update(self, preds: torch.Tensor, target: torch.Tensor):
+    def update_s(self, preds: torch.Tensor, target: torch.Tensor):
         # Flatten the predictions and targets
         preds, target = preds.flatten(), target.flatten()
 
@@ -21,6 +21,32 @@ class CustomMetric(tm.Metric):
         indices = self.n_classes * target.long() + preds.long()
 
         # Initialize the histogram with zeros
+        hist = torch.zeros((self.n_classes ** 2,), dtype=torch.long, device=target.device)
+
+        # Increment the appropriate bins in the histogram
+        hist.scatter_add_(0, indices, torch.ones_like(indices, dtype=torch.long))
+
+        # Increment the confusion matrix
+        self.confusion_matrix += hist.reshape(self.n_classes, self.n_classes)
+
+    def update(self, preds: torch.Tensor, target: torch.Tensor):
+        # Ensure preds and target are in the correct shape, typically [batch_size, ...]
+        # Flatten the predictions and targets across batch
+        batch_size = preds.shape[0]
+        preds = preds.view(batch_size, -1)
+        target = target.view(batch_size, -1)
+
+        # Apply the mask to select valid target indices across all batches
+        mask = (target >= 0) & (target < self.n_classes)
+        
+        # We only want to keep data where mask is True
+        preds = preds[mask]
+        target = target[mask]
+
+        # Calculate the indices for the flattened confusion matrix
+        indices = self.n_classes * target.long() + preds.long()
+
+        # Initialize a histogram tensor to count frequencies
         hist = torch.zeros((self.n_classes ** 2,), dtype=torch.long, device=target.device)
 
         # Increment the appropriate bins in the histogram

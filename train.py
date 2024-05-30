@@ -58,9 +58,13 @@ def main():
 
     # Add labels to the logger
     labels = {
-        "loss": ['all', 'rooms', 'icons', 'heatmap', 'mmd'],
-        "weighted_loss": ['all', 'rooms', 'icons', 'heatmap', 'mmd'],
-        "weights": ['rooms', 'icons', 'heatmap'],
+        "loss": [
+            'loss/all/base', 'loss/all/uncertainty', # all losses
+            'loss/rooms/base', 'loss/rooms/uncertainty', 'loss/rooms/weights', # room losses
+            'loss/icons/base', 'loss/icons/uncertainty', 'loss/icons/weights', # icon losses
+            'loss/heats/base', 'loss/heats/uncertainty', 'loss/heats/weights', # heatmap losses
+            'loss/mmd/base', 'loss/mmd/uncertainty', 'loss/mmd/weights' # mmd losses
+        ],
         "room": ["Background", "Outdoor", "Wall", "Kitchen", "Living Room" ,"Bed Room", "Bath", "Entry", "Railing", "Storage", "Garage", "Undefined"],
         "icon": ["No Icon", "Window", "Door", "Closet", "Electrical Applience" ,"Toilet", "Sink", "Sauna Bench", "Fire Place", "Bathtub", "Chimney"],
         "heat": ["I-UP", "I-RIGHT", "I-DOWN", "I-LEFT", # I junctions
@@ -70,10 +74,6 @@ def main():
                  "O-UP", "O-RIGHT", "O-DOWN", "O-LEFT", # O(pening) junctions
                  "ICON-UP-RIGHT", "ICON-RIGHT-DOWN", "ICON-DOWN-LEFT", "ICON-LEFT-UP"] # ICON junctions
     }
-
-    # Add MMD to weight labels
-    if cfg.model.use_mmd:
-        labels["weights"].append("mmd")
 
     # Create loss function
     loss_fn = loss_factory.factory(cfg)
@@ -88,7 +88,8 @@ def main():
     torch.set_float32_matmul_precision("medium")
 
     # Watch model for logging, gradients, parameters, and optimizer parameters
-    wandb_logger.watch(model, log="all")
+    if cfg.model.watch:
+        wandb_logger.watch(model, log="all")
 
     # Runner is the PyTorch Lightning module that contains the instructions for training and validation
     if cfg.model.weights and os.path.exists(cfg.model.weights):
@@ -123,7 +124,7 @@ def main():
         profiler=eval(cfg.debugger.profiler)(dirpath=cfg.debugger.dir+"/profiler", filename=cfg.wandb.experiment_name) if cfg.debugger.profiler else None,
         callbacks=[
             # DeviceStatsMonitor(cpu_stats=True) if cfg.debugger.accelerator else None,
-            ModelCheckpoint(monitor="val/weighted_loss/mmd", mode="min", save_top_k=1)
+            ModelCheckpoint(monitor="val/loss/all/uncertainty", mode="min", save_top_k=1)
         ]
     )
 

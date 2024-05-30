@@ -48,6 +48,11 @@ class CubiCasa5K(pl.LightningDataModule):
             ColorJitterTorch(gray=cfg.dataset.grayscale)
         ]) if cfg.dataset.augmentations else self.dict_tensor()
 
+        self.val_augmentations = Compose([
+            self.resize_padded((0, 0), data_format='dict', size=cfg.dataset.val_size),
+            self.dict_tensor()
+        ]) if cfg.dataset.val_size else self.dict_tensor()
+
 
     def train_data(self):
         return torch.utils.data.DataLoader(
@@ -71,13 +76,13 @@ class CubiCasa5K(pl.LightningDataModule):
     def val_data(self):
         return torch.utils.data.DataLoader(
             self.svg_loader(
-                augmentations=self.dict_tensor(),
+                augmentations=self.val_augmentations,
                 cfg=self.cfg,
                 pre_load=True,
                 source_list=self.cfg.dataset.files.val,
                 target_list=self.cfg.dataset.files.mmd.val,
             ),
-            batch_size=1,
+            batch_size=self.cfg.train.batch_size,
             shuffle=False,
             num_workers=self.cfg.dataset.num_workers,
             pin_memory=self.cfg.dataset.pin_memory,

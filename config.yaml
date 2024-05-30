@@ -1,8 +1,8 @@
 seed: 0
 wandb:
   log: True
-  dir: C:\Users\j.a.hofland\Documents\thesis-coding\pytorch-lightning-example\runs_new
-  experiment_name: TEST_METRICS
+  dir: C:\Users\j.a.hofland\Documents\thesis-coding\pytorch-lightning-example\runs
+  experiment_name: TEST_MMD
   entity: hofland-jeroen
   project: cc5k
 debugger:
@@ -18,6 +18,7 @@ model:
   loss: UncertaintyLoss # UncertaintyLoss | False
   use_mmd: True
   weights: False # path | False
+  watch: False
 optimizer:
   name: adam
   lr: 0.001
@@ -28,7 +29,7 @@ train:
   batch_size: 8
   accumulate_grad_batches: 1 # effective batch size = accumulate_grad_batches * batch_size
   resume: False # path | False
-  max_epochs: 2
+  max_epochs: 3
   max_time:
     enable: False
     days: 0
@@ -57,6 +58,7 @@ dataset:
   load_samples: True
   scale: True
   image_size: 256
+  val_size: 1024
   files:
     root: C:\Users\j.a.hofland\Documents\thesis-coding\pytorch-lightning-example\data\
     train: train_hqa_hq.txt
