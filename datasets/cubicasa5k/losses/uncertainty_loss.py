@@ -107,8 +107,8 @@ class UncertaintyLoss(Module):
 
             # Calculate the MMD loss
             self.loss_mmd     = self.mmd_loss(source_latent, target_latent)
-            self.loss_mmd_var = self.mmd_loss(source_latent*torch.exp(-self.mmd_vars), target_latent)
-            #self.loss_mmd_var = self.loss_mmd * torch.exp(-self.mmd_vars) + torch.log(torch.exp(self.mmd_vars))
+            # self.loss_mmd_var = self.mmd_loss(source_latent*torch.exp(-self.mmd_vars), target_latent)
+            self.loss_mmd_var = torch.exp(-self.mmd_vars) * self.loss_mmd + torch.log(1 + torch.exp(self.mmd_vars))
             # self.loss_mmd_var = self.mmd_vars * self.loss_mmd
 
         # Calculate the loss with uncertainty magic

@@ -1,21 +1,24 @@
 seed: 0
 wandb:
-  log: true
-  dir: /home/nfs/jlhofland/runs
-  experiment_name: TRAIN_100E_400E_B20_32W
+  log: True
+  dir: /default/
+  experiment_name: MMD_100E_B20
   entity: hofland-jeroen
   project: cc5k
 debugger:
   batches: False # number | False
   profiler: SimpleProfiler # SimpleProfiler | AdvancedProfiler | False
+  dir: /home/nfs/jlhofland/debugging
   accelerator: False
   batch_tuner: False
   anomaly: False
 model:
-  name: cubicasa
+  name: CubiCasa # CubiCasaMMD | CubiCasa | False
   input_slice: [21, 12, 11]
-  loss: uncertainty
+  loss: UncertaintyLoss # UncertaintyLoss | False
+  use_mmd: True
   weights: False # path | False
+  watch: False
 optimizer:
   name: adam
   lr: 0.001
@@ -25,12 +28,12 @@ optimizer:
 train:
   batch_size: 20
   accumulate_grad_batches: 1 # effective batch size = accumulate_grad_batches * batch_size
-  resume: /home/nfs/jlhofland/weights/model-4.ckpt # path | False
-  max_epochs: 400
+  resume: False # path | False
+  max_epochs: 100
   max_time:
     enable: False
     days: 0
-    hours: 23
+    hours: 0
     minutes: 0
   debug:
     enable: False
@@ -38,15 +41,32 @@ train:
     train_batches: 50 # number | False
     val_batches: 50 # number | False
     test_batches: 50 # number | False
+test:
+  weights: False # path | False
+  data: test_hqa.txt
 dataset:
   name: cubicasa
-  num_workers: 8 # 0 (windows) | #cpus (linux)
+  num_workers: 8 # 10 (local) | 0.5 * cpus (cluster)
   format: txt # lmdb or txt
   augmentations: True
-  scale: False
+  original_size: True
+  persistent_workers: True
+  pin_memory: True
+  grayscale: False
+  overwrite: True
+  save_samples: True
+  load_samples: True
+  scale: True
   image_size: 256
+  val_size: 512
   files:
     root: /default/
     train: train_hqa_hq.txt
     val: val_hqa_hq.txt
-    test: test_c.txt
+    mmd:
+      train: train_c.txt
+      val: val_c.txt
+    test: 
+      d1: test_hqa.txt
+      d2: test_hq.txt
+      d3: test_c.txt
