@@ -1,4 +1,5 @@
 from models.cubicasa import CubiCasa
+from models.cubicasa21m import CubiCasa21M
 from torch import nn
 
 
@@ -6,7 +7,10 @@ def factory(cfg):
     if cfg.model.name == 'CubiCasa':
         # Create the model and initialize weights
         model = CubiCasa(51)
-        model.init_weights()
+
+        # Initialize the weights of the model
+        if cfg.model.init_weights:
+            model.init_weights()
 
         # Count the number of classes
         n_classes = sum(cfg.model.input_slice)
@@ -19,13 +23,8 @@ def factory(cfg):
         model.conv4_ = nn.Conv2d(256, n_classes, bias=True, kernel_size=1)
         model.upsample = nn.ConvTranspose2d(n_classes, n_classes, kernel_size=4, stride=4)
 
+        # Initialize the weights of the modified layers
         init_weights = [model.conv4_, model.upsample]
-
-        # # Create fully connected layer to get latent representation
-        # if cfg.model.use_mmd:
-        #     # [batch_size, 512, H/64, W/64] --> [batch_size, 1, H/64, W/64]
-        #     model.reduce_conv = nn.Conv2d(512, 1, kernel_size=1)
-        #     init_weights.append(model.reduce_conv)
 
         # Initialize the weights of the modified layers
         for m in init_weights:

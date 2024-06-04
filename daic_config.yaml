@@ -19,6 +19,7 @@ model:
   use_mmd: True
   weights: False # path | False
   watch: False
+  init_weights: True
 optimizer:
   name: adam
   lr: 0.001

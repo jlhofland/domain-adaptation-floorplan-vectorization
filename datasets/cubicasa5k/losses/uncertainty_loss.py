@@ -65,7 +65,7 @@ class UncertaintyLoss(Module):
         if use_mmd:
             self.mmd_loss = MMDLoss()
             # self.mmd_vars = Parameter(torch.tensor([0], requires_grad=True, dtype=torch.float32).cuda())
-            self.mmd_vars = Parameter(torch.tensor([0], requires_grad=True, dtype=torch.float32).cuda())
+            self.mmd_vars = 0.1
 
         # Uncertainty parameters
         self.log_vars = Parameter(torch.tensor([0, 0], requires_grad=True, dtype=torch.float32).cuda())
@@ -107,8 +107,7 @@ class UncertaintyLoss(Module):
 
             # Calculate the MMD loss
             self.loss_mmd     = self.mmd_loss(source_latent, target_latent)
-            # self.loss_mmd_var = self.mmd_loss(source_latent*torch.exp(-self.mmd_vars), target_latent)
-            self.loss_mmd_var = torch.exp(-self.mmd_vars) * self.loss_mmd + torch.log(1 + torch.exp(self.mmd_vars))
+            self.loss_mmd_var = self.loss_mmd * self.mmd_vars
             # self.loss_mmd_var = self.mmd_vars * self.loss_mmd
 
         # Calculate the loss with uncertainty magic
@@ -192,7 +191,7 @@ class UncertaintyLoss(Module):
             # mmd
             self.loss_mmd,
             self.loss_mmd_var,
-            torch.exp(-self.mmd_vars) if self.use_mmd else 0
+            self.mmd_vars if self.use_mmd else 0
         ]
 
         # Convert the list of loss values to a tensor

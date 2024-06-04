@@ -4,9 +4,9 @@ import torch.nn.functional as F
 from models import human_pose_estimation
 from models.residual import Residual
 
-class CubiCasa(nn.Module):
-    def __init__(self, classes):
-        super(CubiCasa, self).__init__()
+class CubiCasa21M(nn.Module):
+    def __init__(self, classes, latent_dim=512):
+        super(CubiCasa21M, self).__init__()
         self.conv1_ = nn.Conv2d(3, 64, bias=True, kernel_size=7, stride=2, padding=3) # Output: (B, 64, H/2, W/2)
         self.bn1 = nn.BatchNorm2d(64)
         self.relu1 = nn.ReLU(inplace=True)
@@ -38,9 +38,20 @@ class CubiCasa(nn.Module):
         self.r44_a = Residual(256, 512)
         self.r45_a = Residual(512, 512)
 
-        # Use adaptive pooling to get the latent space representation
-        self.maxpool5 = nn.AdaptiveMaxPool2d((1, 1))
+        # LATNET SPACE PART
+        self.maxpool5 = nn.MaxPool2d(kernel_size=4, stride=4) # Output: (B, 512, H/256, W/256)
+        self.r51_a = Residual(512, 256)
+        self.r52_a = Residual(256, 256)
+        self.r53_a = Residual(256, 256)
+        self.r54_a = Residual(256, 128) # Output: (B, 128, H/256, W/256)
 
+        # Upsample the latent space to the original size
+        self.upsample5 = nn.ConvTranspose2d(128, 512, kernel_size=4, stride=4) # Output: (B, 256, H/64, W/64)
+        self.r51_b = Residual(512, 512)
+        self.r52_b = Residual(512, 512)
+        self.r53_b = Residual(512, 512)
+
+        self.r5_ = Residual(512, 512)
         self.upsample4 = nn.ConvTranspose2d(512, 512, kernel_size=2, stride=2) # Output: (B, 512, H/32, W/32)
         self.r41_b = Residual(256, 256)
         self.r42_b = Residual(256, 256)
@@ -121,28 +132,39 @@ class CubiCasa(nn.Module):
 
         out3b = self.r31_b(out2a)
         out3b = self.r32_b(out3b)
-        out3b = self.r33_b(out3b) # Output: (B, 256, H/16, W/16)
+        out3b = self.r33_b(out3b) # Output: (B, 256, H/32, W/32)
 
-        out4a = self.maxpool4(out3a) 
+        out4a = self.maxpool4(out3a)
         out4a = self.r41_a(out4a)
         out4a = self.r42_a(out4a)
-        out4a = self.r43_a(out4a) # Output: (B, 256, H/64, W/64)
+        out4a = self.r43_a(out4a)
         out4a = self.r44_a(out4a)
         out4a = self.r45_a(out4a) # Output: (B, 512, H/64, W/64)
 
-        # Use adaptive pooling to get the latent space representation
-        # (B, 256, H/64, W/64) -> (B, 256, 1, 1)
-        latent = self.maxpool5(out4a)
-
-        # If we do not want the prediction, return the mean over channels
-        if not return_output:
-            return None, latent
-
         out4b = self.r41_b(out3a)
         out4b = self.r42_b(out4b)
-        out4b = self.r43_b(out4b) # Output: (B, 512, H/32, W/32)
+        out4b = self.r43_b(out4b) # Output: (B, 512, H/64, W/64)
 
-        out4_ = self.upsample4(out4a)
+        # Latent space part
+        out5a = self.maxpool5(out4a)
+        out5a = self.r51_a(out5a)
+        out5a = self.r52_a(out5a)
+        out5a = self.r53_a(out5a)
+        out5a = self.r54_a(out5a) # Output: (B, 128, H/256, W/256)
+
+        out5b = self.r51_b(out4a)
+        out5b = self.r52_b(out5b)
+        out5b = self.r53_b(out5b) 
+
+        out5_ = self.upsample5(out5a) 
+        out5 = self._upsample_add(out5_, out5b) 
+        out5 = self.r5_(out5) 
+
+        # If we do not want the prediction, return the latent space
+        if not return_output:
+            return None, out5a
+
+        out4_ = self.upsample4(out5)
         out4 = self._upsample_add(out4_, out4b)
         out4 = self.r4_(out4)
 
@@ -170,7 +192,7 @@ class CubiCasa(nn.Module):
         out[:, :21] = self.sigmoid(out[:, :21])
 
         if return_latent:
-            return out, latent
+            return out, out5a
         else:
             return out, None
 

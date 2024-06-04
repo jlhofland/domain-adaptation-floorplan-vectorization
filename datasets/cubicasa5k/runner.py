@@ -174,7 +174,7 @@ class Runner(pl.LightningModule):
 
         # For lenth of batch, log sample
         for i in range(3) if batch_idx < 1 else []:
-            self._log_sample(*heats, *rooms, *icons, batch, i, "val/samples", losses)
+            self._log_sample(*heats, *rooms, *icons, batch, i, batch_idx, "val/samples", losses)
 
         # Get losses and weights
         self.losses["val"].append(losses)
@@ -196,9 +196,9 @@ class Runner(pl.LightningModule):
         # Get losses
         losses = self.loss_fn.get_loss()
 
-        # For lenth of batch, log sample
+        # For all images in the batch, log sample
         for i in range(batch['image'].shape[0]):
-            self._log_sample(*heats, *rooms, *icons, batch, i, "test/samples", losses)
+            self._log_sample(*heats, *rooms, *icons, batch, i, batch_idx, "test/samples", losses)
 
         # Get losses and weights
         self.losses["test"].append(losses)
@@ -279,7 +279,7 @@ class Runner(pl.LightningModule):
         # Reset losses
         self.losses[stage] = []
 
-    def _log_sample(self, heats_pred, heats_label, rooms_pred, rooms_label, icons_pred, icons_label, batch, id, stage, ls):
+    def _log_sample(self, heats_pred, heats_label, rooms_pred, rooms_label, icons_pred, icons_label, batch, id, idx, stage, ls):
         # Create class labels
         class_heats = {index: value for index, value in enumerate(self.labels["heat"])}
         class_rooms = {index: value for index, value in enumerate(self.labels["room"])}
@@ -312,4 +312,4 @@ class Runner(pl.LightningModule):
         })
 
         # Log room segmentation
-        self.logger.experiment.log({f"{stage}/sample {id}": image})
+        self.logger.experiment.log({f"{stage}/sample {id}-{idx}": image})
