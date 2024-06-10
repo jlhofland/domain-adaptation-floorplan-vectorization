@@ -4,6 +4,7 @@ import torch.nn.functional as F
 from datasets.cubicasa5k.metrics import CustomMetric
 from torch import optim
 import wandb
+import math
 
 class Runner(pl.LightningModule):
     def __init__(self, cfg, model, loss_fn, labels, *args, **kwargs):
@@ -57,8 +58,9 @@ class Runner(pl.LightningModule):
                 "scheduler": scheduler,
                 "interval": "epoch", 
                 "monitor": "val/loss/all/uncertainty", # Monitor the total loss with variance
-                "frequency": 1, 
+                "frequency": 1,
             },
+
         }
 
     def _step(self, batch):
@@ -77,8 +79,11 @@ class Runner(pl.LightningModule):
             # Forward pass to get prediction
             _, t_latent = self.model(t, return_latent=True, return_output=False)
 
+            # Get current learning rate
+            mmd_lamdba = 2 / (1 + math.exp(-self.cfg.optimizer.mmd_lambda * (self.current_epoch) / self.cfg.train.max_epochs)) - 1
+
             # Calculate the loss
-            loss = self.loss_fn(y_hat, y, y_latent, t_latent)
+            loss = self.loss_fn(y_hat, y, y_latent, t_latent, mmd_lamdba)
         else:
             # Calculate prediction
             y_hat, _ = self.model(x)
@@ -173,8 +178,8 @@ class Runner(pl.LightningModule):
         losses = self.loss_fn.get_loss()
 
         # For lenth of batch, log sample
-        for i in range(3) if batch_idx < 1 else []:
-            self._log_sample(*heats, *rooms, *icons, batch, i, batch_idx, "val/samples", losses)
+        if batch_idx < 3:
+            self._log_sample(*heats, *rooms, *icons, batch, 0, batch_idx, "val/samples", losses)
 
         # Get losses and weights
         self.losses["val"].append(losses)

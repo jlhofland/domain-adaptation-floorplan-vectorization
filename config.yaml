@@ -26,6 +26,7 @@ optimizer:
   eps: 1e-08
   betas: [0.9, 0.999]
   patience: 10
+  mmd_lambda: 5 # 5=[0-0.55], 10=[0-0.84]
 train:
   batch_size: 8
   accumulate_grad_batches: 1 # effective batch size = accumulate_grad_batches * batch_size
@@ -59,7 +60,7 @@ dataset:
   load_samples: True
   scale: True
   image_size: 256
-  val_size: 512
+  val_size: False
   files:
     root: C:\Users\j.a.hofland\Documents\thesis-coding\pytorch-lightning-example\data\
     train: train_hqa_hq.txt

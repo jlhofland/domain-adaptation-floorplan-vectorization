@@ -83,7 +83,7 @@ class CubiCasa5K(pl.LightningDataModule):
                 source_list=self.cfg.dataset.files.val,
                 target_list=self.cfg.dataset.files.mmd.val,
             ),
-            batch_size=self.cfg.train.batch_size,
+            batch_size=self.cfg.train.batch_size if self.cfg.dataset.val_size else 1,
             shuffle=False,
             num_workers=self.cfg.dataset.num_workers,
             pin_memory=self.cfg.dataset.pin_memory,
