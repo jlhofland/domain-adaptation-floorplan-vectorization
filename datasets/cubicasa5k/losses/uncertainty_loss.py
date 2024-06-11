@@ -40,7 +40,7 @@ class UncertaintyLoss(Module):
     def __init__(self, input_slice=[21, 13, 17],
                  target_slice=[21, 1, 1], sub=0,
                  use_cuda=True, mask=False,
-                 use_mmd=False, batch_size=20):
+                 use_mmd=False):
         super(UncertaintyLoss, self).__init__()
         # Set the input and target slice
         self.input_slice = input_slice
@@ -62,21 +62,15 @@ class UncertaintyLoss(Module):
         self.use_cuda = use_cuda
         self.use_mmd = use_mmd
 
-        # MMD loss
+        # Create MMD loss if used
         if use_mmd:
             self.mmd_loss = MMDLoss()
-            # self.mmd_vars = Parameter(torch.tensor([0], requires_grad=True, dtype=torch.float32).cuda())
-            self.mmd_length = batch_size
-
-            # Create tensor of size [batch_id, latent_dim]
-            self.source_images = []
-            self.target_images = []
 
         # Uncertainty parameters
         self.log_vars = Parameter(torch.tensor([0, 0], requires_grad=True, dtype=torch.float32).cuda())
         self.log_vars_mse = Parameter(torch.zeros(input_slice[0], requires_grad=True, dtype=torch.float32).cuda())
 
-    def forward(self, input, label, source_latent=None, target_latent=None, mmd_var=0):
+    def forward(self, input, label, source_latent=None, target_latent=None, mmd_lambda=0):
         # Split input and target (batch, channel, height, width)
         n, c, h, w = input.size()
         nl, cl, hl, wl = label.size()
@@ -109,22 +103,10 @@ class UncertaintyLoss(Module):
             source_latent = source_latent.view(source_latent.size(0), -1)
             target_latent = target_latent.view(target_latent.size(0), -1)
 
-            # Update the MMD scalar (which is scaled using learning rate scheduler)
-            self.mmd_vars = mmd_var
-        
-            # # Append latent vectors in case of validation and test set
-            # if source_latent.size(0) != self.mmd_length:
-            #     if len(self.source_images) < self.mmd_length:
-            #         self.source_images.append(source_latent)
-            #         self.target_images.append(target_latent)
-            #     else:
-            #         source_latent = torch.cat(self.source_images, 0)
-            #         target_latent = torch.cat(self.target_images, 0)
-            #         self.source_images = []
-            #         self.target_images = []
+            # Update mmd vars with the provided lambda (based on the epoch number)
+            self.mmd_vars = mmd_lambda
 
             # Calculate the MMD loss
-            # if source_latent.size(0) == self.mmd_length:
             self.loss_mmd     = self.mmd_loss(source_latent, target_latent)
             self.loss_mmd_var = self.mmd_vars*self.loss_mmd
 
@@ -184,10 +166,6 @@ class UncertaintyLoss(Module):
 
         # Sum weights of heatmaps
         loss_params[2] = loss_params[2].sum()
-
-        # # Include MMD loss parameter in the list of loss parameters
-        # if self.use_mmd:
-        #     loss_params.append(self.log_vars[2]) # MMD uncertainty parameter
 
         # List of loss variables [5, 5, 3]
         loss_values = [

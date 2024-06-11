@@ -39,7 +39,7 @@ class CubiCasa21M(nn.Module):
         self.r45_a = Residual(512, 512)
 
         # LATNET SPACE PART
-        self.maxpool5 = nn.MaxPool2d(kernel_size=4, stride=4) # Output: (B, 512, H/256, W/256)
+        self.maxpool5 = nn.MaxPool2d(kernel_size=2, stride=2) # Output: (B, 512, H/128, W/128)
         self.r51_a = Residual(512, 256)
         self.r52_a = Residual(256, 256)
         self.r53_a = Residual(256, 256)

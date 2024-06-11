@@ -11,8 +11,8 @@ from omegaconf import OmegaConf
 
 # PyTorch Lightning
 from pytorch_lightning.loggers import WandbLogger
-from pytorch_lightning.profilers import SimpleProfiler, AdvancedProfiler
-from pytorch_lightning.callbacks import DeviceStatsMonitor, LearningRateMonitor
+from pytorch_lightning.profilers import SimpleProfiler, AdvancedProfiler 
+from pytorch_lightning.callbacks import LearningRateMonitor
 from pytorch_lightning.tuner import Tuner
 from pytorch_lightning import Trainer
 from pytorch_lightning import seed_everything

@@ -55,8 +55,8 @@ dataset:
   persistent_workers: True
   pin_memory: True
   grayscale: False
-  overwrite: False
-  save_samples: False
+  overwrite: True
+  save_samples: True
   load_samples: True
   scale: True
   image_size: 256
