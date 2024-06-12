@@ -1,14 +1,14 @@
 seed: 0
 wandb:
   log: True
-  dir: C:\Users\j.a.hofland\Documents\thesis-coding\pytorch-lightning-example\runs
-  experiment_name: CC25MMD_5E_B8
+  dir: /default/
+  experiment_name: CC17M_MMD_100E_B20_S1
   entity: hofland-jeroen
   project: cc5k
 debugger:
   batches: False # number | False
   profiler: SimpleProfiler # SimpleProfiler | AdvancedProfiler | False
-  dir: C:\Users\j.a.hofland\Documents\thesis-coding\pytorch-lightning-example\debugging
+  dir: /home/nfs/jlhofland/debugging
   accelerator: False
   batch_tuner: False
   anomaly: False
@@ -19,19 +19,19 @@ model:
   use_mmd: True
   weights: False # path | False
   watch: False
-  init_weights: False
+  init_weights: True
 optimizer:
   name: adam
   lr: 0.001
   eps: 1e-08
   betas: [0.9, 0.999]
   patience: 10
-  mmd_lambda: 1 # 1-10
+  mmd_lambda: 1
 train:
-  batch_size: 8
+  batch_size: 20
   accumulate_grad_batches: 1 # effective batch size = accumulate_grad_batches * batch_size
   resume: False # path | False
-  max_epochs: 5
+  max_epochs: 100
   max_time:
     enable: False
     days: 0
@@ -48,21 +48,21 @@ test:
   data: test_hqa.txt
 dataset:
   name: cubicasa
-  num_workers: 4 # 10 (local) | 0.5 * cpus (cluster)
+  num_workers: 8 # 10 (local) | 0.5 * cpus (cluster)
   format: txt # lmdb or txt
   augmentations: True
   original_size: True
   persistent_workers: True
   pin_memory: True
   grayscale: False
-  overwrite: False
-  save_samples: False
+  overwrite: True
+  save_samples: True
   load_samples: True
   scale: True
   image_size: 256
   val_size: False
   files:
-    root: C:\Users\j.a.hofland\Documents\thesis-coding\pytorch-lightning-example\data\
+    root: /default/
     train: train_hqa_hq.txt
     val: val_hqa_hq.txt
     mmd:

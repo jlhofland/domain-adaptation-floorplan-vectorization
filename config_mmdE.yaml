@@ -2,7 +2,7 @@ seed: 0
 wandb:
   log: True
   dir: /default/
-  experiment_name: MMD_100E_B20
+  experiment_name: CC25M_MMD_100E_B20_S1
   entity: hofland-jeroen
   project: cc5k
 debugger:
@@ -19,13 +19,14 @@ model:
   use_mmd: True
   weights: False # path | False
   watch: False
-  init_weights: True
+  init_weights: False
 optimizer:
   name: adam
   lr: 0.001
   eps: 1e-08
   betas: [0.9, 0.999]
   patience: 10
+  mmd_lambda: 1
 train:
   batch_size: 20
   accumulate_grad_batches: 1 # effective batch size = accumulate_grad_batches * batch_size
@@ -59,7 +60,7 @@ dataset:
   load_samples: True
   scale: True
   image_size: 256
-  val_size: 512
+  val_size: False
   files:
     root: /default/
     train: train_hqa_hq.txt
