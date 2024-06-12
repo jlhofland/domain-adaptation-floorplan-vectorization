@@ -80,7 +80,7 @@ class Runner(pl.LightningModule):
             _, t_latent = self.model(t, return_latent=True, return_output=False)
 
             # Get current learning rate
-            mmd_lamdba = 2 / (1 + math.exp(-self.cfg.optimizer.mmd_lambda * (self.current_epoch) / self.cfg.train.max_epochs)) - 1
+            mmd_lamdba = 2 / (1 + math.exp(-self.cfg.optimizer.mmd_lambda * (self.current_epoch / self.cfg.train.max_epochs))) - 1
 
             # Calculate the loss
             loss = self.loss_fn(y_hat, y, y_latent, t_latent, mmd_lamdba)

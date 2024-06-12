@@ -4,9 +4,9 @@ import torch.nn.functional as F
 from models import human_pose_estimation
 from models.residual import Residual
 
-class CubiCasa21M(nn.Module):
+class CubiCasaMMD(nn.Module):
     def __init__(self, classes, latent_dim=512):
-        super(CubiCasa21M, self).__init__()
+        super(CubiCasaMMD, self).__init__()
         self.conv1_ = nn.Conv2d(3, 64, bias=True, kernel_size=7, stride=2, padding=3) # Output: (B, 64, H/2, W/2)
         self.bn1 = nn.BatchNorm2d(64)
         self.relu1 = nn.ReLU(inplace=True)
@@ -35,44 +35,58 @@ class CubiCasa21M(nn.Module):
         self.r41_a = Residual(256, 256)
         self.r42_a = Residual(256, 256)
         self.r43_a = Residual(256, 256)
-        self.r44_a = Residual(256, 512)
-        self.r45_a = Residual(512, 512)
 
-        # LATNET SPACE PART
-        self.maxpool5 = nn.MaxPool2d(kernel_size=2, stride=2) # Output: (B, 512, H/128, W/128)
-        self.r51_a = Residual(512, 256)
+        ###     OLD ARCHITECTURE      ###
+        # self.r44_a = Residual(256, 512)
+        # self.r45_a = Residual(512, 512)
+
+        ###    NEW ARCHITECTURE      ###
+        self.maxpool5 = nn.MaxPool2d(kernel_size=2, stride=2) # Output: (B, 256, H/128, W/128)
+        self.r51_a = Residual(256, 256)
         self.r52_a = Residual(256, 256)
         self.r53_a = Residual(256, 256)
-        self.r54_a = Residual(256, 128) # Output: (B, 128, H/256, W/256)
 
-        # Upsample the latent space to the original size
-        self.upsample5 = nn.ConvTranspose2d(128, 512, kernel_size=4, stride=4) # Output: (B, 256, H/64, W/64)
-        self.r51_b = Residual(512, 512)
-        self.r52_b = Residual(512, 512)
-        self.r53_b = Residual(512, 512)
+        self.maxpool6 = nn.AdaptiveMaxPool2d((1, 1)) # Output: (B, 256, H/256, W/256)
+        self.r61_a = Residual(256, 256)
+        self.r62_a = Residual(256, 256)
+        self.r63_a = Residual(256, 256)
+        self.r64_a = Residual(256, 512)
+        self.r65_a = Residual(512, 512)
 
-        self.r5_ = Residual(512, 512)
+        self.upsample6 = nn.ConvTranspose2d(512, 512, kernel_size=2, stride=2) # Output: (B, 512, H/128, W/128)
+        self.r61_b = Residual(256, 256)
+        self.r62_b = Residual(256, 256)
+        self.r63_b = Residual(256, 512)
+        self.r6_   = Residual(512, 512)
+
+        self.upsample5 = nn.ConvTranspose2d(512, 512, kernel_size=2, stride=2) # Output: (B, 512, H/64, W/64)
+        self.r51_b = Residual(256, 256)
+        self.r52_b = Residual(256, 256)
+        self.r53_b = Residual(256, 512)
+        self.r5_   = Residual(512, 512)
+        ###   NEW ARCHITECTURE      ###
+
         self.upsample4 = nn.ConvTranspose2d(512, 512, kernel_size=2, stride=2) # Output: (B, 512, H/32, W/32)
         self.r41_b = Residual(256, 256)
         self.r42_b = Residual(256, 256)
         self.r43_b = Residual(256, 512)
 
         self.r4_ = Residual(512, 512)
-        self.upsample3 = nn.ConvTranspose2d(512, 512, kernel_size=2, stride=2)
+        self.upsample3 = nn.ConvTranspose2d(512, 512, kernel_size=2, stride=2) # Output: (B, 512, H/16, W/16)
 
         self.r31_b = Residual(256, 256)
         self.r32_b = Residual(256, 256)
         self.r33_b = Residual(256, 512)
 
         self.r3_ = Residual(512, 512)
-        self.upsample2 = nn.ConvTranspose2d(512, 512, kernel_size=2, stride=2)
+        self.upsample2 = nn.ConvTranspose2d(512, 512, kernel_size=2, stride=2) # Output: (B, 512, H/8, W/8)
 
         self.r21_b = Residual(256, 256)
         self.r22_b = Residual(256, 256)
         self.r23_b = Residual(256, 512)
 
         self.r2_ = Residual(512, 512)
-        self.upsample1 = nn.ConvTranspose2d(512, 512, kernel_size=2, stride=2)
+        self.upsample1 = nn.ConvTranspose2d(512, 512, kernel_size=2, stride=2) # Output: (B, 512, H/4, W/4)
 
         self.r11_b = Residual(256, 256)
         self.r12_b = Residual(256, 256)
@@ -138,31 +152,53 @@ class CubiCasa21M(nn.Module):
         out4a = self.r41_a(out4a)
         out4a = self.r42_a(out4a)
         out4a = self.r43_a(out4a)
-        out4a = self.r44_a(out4a)
-        out4a = self.r45_a(out4a) # Output: (B, 512, H/64, W/64)
 
         out4b = self.r41_b(out3a)
         out4b = self.r42_b(out4b)
-        out4b = self.r43_b(out4b) # Output: (B, 512, H/64, W/64)
+        out4b = self.r43_b(out4b) 
 
-        # Latent space part
+        ### OLD ARCHITECTURE ###
+        # out4a = self.r44_a(out4a)
+        # out4a = self.r45_a(out4a)
+
+        ### NEW ARCHITECTURE ###
         out5a = self.maxpool5(out4a)
         out5a = self.r51_a(out5a)
         out5a = self.r52_a(out5a)
         out5a = self.r53_a(out5a)
-        out5a = self.r54_a(out5a) # Output: (B, 128, H/256, W/256)
 
         out5b = self.r51_b(out4a)
         out5b = self.r52_b(out5b)
         out5b = self.r53_b(out5b) 
 
-        out5_ = self.upsample5(out5a) 
-        out5 = self._upsample_add(out5_, out5b) 
-        out5 = self.r5_(out5) 
+        out6a = self.maxpool6(out5a)
+        out6a = self.r61_a(out6a)
+        out6a = self.r62_a(out6a)
+        out6a = self.r63_a(out6a)
 
         # If we do not want the prediction, return the latent space
         if not return_output:
-            return None, out5a
+            return None, out6a
+        
+        # Else, save for later
+        else:
+            latent = out6a
+
+        out6a = self.r64_a(out6a)
+        out6a = self.r65_a(out6a)
+
+        out6b = self.r61_b(out5a)
+        out6b = self.r62_b(out6b)
+        out6b = self.r63_b(out6b)
+
+        out6_ = self.upsample6(out6a)
+        out6 = self._upsample_add(out6_, out6b)
+        out6 = self.r6_(out6)
+
+        out5_ = self.upsample5(out6)
+        out5 = self._upsample_add(out5_, out5b)
+        out5 = self.r5_(out5)
+        ### NEW ARCHITECTURE ###
 
         out4_ = self.upsample4(out5)
         out4 = self._upsample_add(out4_, out4b)
@@ -192,7 +228,7 @@ class CubiCasa21M(nn.Module):
         out[:, :21] = self.sigmoid(out[:, :21])
 
         if return_latent:
-            return out, out5a
+            return out, latent
         else:
             return out, None
 
