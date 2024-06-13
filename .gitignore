@@ -172,3 +172,4 @@ pytorch-lightning-example
 
 # Ignore ckpt files in weights folder
 weights/*.ckpt
+experiments/**/*.png

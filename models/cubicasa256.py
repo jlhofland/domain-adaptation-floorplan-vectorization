@@ -4,9 +4,9 @@ import torch.nn.functional as F
 from models import human_pose_estimation
 from models.residual import Residual
 
-class CubiCasa(nn.Module):
+class CubiCasa256(nn.Module):
     def __init__(self, classes):
-        super(CubiCasa, self).__init__()
+        super(CubiCasa256, self).__init__()
         self.conv1_ = nn.Conv2d(3, 64, bias=True, kernel_size=7, stride=2, padding=3) # Output: (B, 64, H/2, W/2)
         self.bn1 = nn.BatchNorm2d(64)
         self.relu1 = nn.ReLU(inplace=True)
@@ -127,16 +127,17 @@ class CubiCasa(nn.Module):
         out4a = self.r41_a(out4a)
         out4a = self.r42_a(out4a)
         out4a = self.r43_a(out4a) # Output: (B, 256, H/64, W/64)
-        out4a = self.r44_a(out4a)
-        out4a = self.r45_a(out4a) # Output: (B, 512, H/64, W/64)
 
         # Use adaptive pooling to get the latent space representation
-        # (B, 256, H/64, W/64) -> (B, 512, 1, 1)
-        latent = self.maxpool5(out4a)
+        # (B, 256, H/64, W/64) -> (B, 256, 1, 1)
+        outlt = self.maxpool5(out4a)
 
         # If we do not want the prediction, return the mean over channels
         if not return_output:
-            return None, latent
+            return None, outlt
+        
+        out4a = self.r44_a(out4a)
+        out4a = self.r45_a(out4a) # Output: (B, 512, H/64, W/64)
 
         out4b = self.r41_b(out3a)
         out4b = self.r42_b(out4b)
@@ -170,7 +171,7 @@ class CubiCasa(nn.Module):
         out[:, :21] = self.sigmoid(out[:, :21])
 
         if return_latent:
-            return out, latent
+            return out, outlt
         else:
             return out, None
 

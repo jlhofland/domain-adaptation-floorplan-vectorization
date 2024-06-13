@@ -2,35 +2,35 @@ seed: 0
 wandb:
   log: True
   dir: C:\Users\j.a.hofland\Documents\thesis-coding\pytorch-lightning-example\runs
-  experiment_name: CC25MMD_5E_B8
+  experiment_name: CC21M_MMD_100E_B20_S1
   entity: hofland-jeroen
   project: cc5k
 debugger:
-  batches: False # number | False
+  batches: 5 # number | False
   profiler: SimpleProfiler # SimpleProfiler | AdvancedProfiler | False
   dir: C:\Users\j.a.hofland\Documents\thesis-coding\pytorch-lightning-example\debugging
   accelerator: False
   batch_tuner: False
   anomaly: False
 model:
-  name: CubiCasa # CubiCasaMMD | CubiCasa | False
+  name: CubiCasaMMD # CubiCasaMMD | CubiCasa | False
   input_slice: [21, 12, 11]
   loss: UncertaintyLoss # UncertaintyLoss | False
   use_mmd: True
   weights: False # path | False
   watch: False
-  init_weights: False
+  init_weights: True
 optimizer:
   name: adam
   lr: 0.001
   eps: 1e-08
   betas: [0.9, 0.999]
   patience: 10
-  mmd_lambda: 1 # 1-10
+  mmd_lambda: 1
 train:
   batch_size: 8
   accumulate_grad_batches: 1 # effective batch size = accumulate_grad_batches * batch_size
-  resume: False # path | False
+  resume: False # path | False 
   max_epochs: 5
   max_time:
     enable: False
