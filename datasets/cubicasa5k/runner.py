@@ -17,6 +17,7 @@ class Runner(pl.LightningModule):
         self.model   = model
         self.loss_fn = loss_fn
         self.labels  = labels
+        self.mmd_lambda = cfg.mmd.lambda_value if cfg.model.use_mmd else 0
 
         # Losses for logging
         self.losses = {
@@ -71,19 +72,16 @@ class Runner(pl.LightningModule):
         # If we have target data, calculate the loss using MMD
         if 'target' in batch and self.cfg.model.use_mmd:
             # Forward pass to get prediction
-            y_hat, y_latent = self.model(x, return_latent=True)
+            y_hat, y_latent = self.model(x, return_latent=True, maxpool=self.cfg.mmd.use_maxpool)
 
             # Get target image
             t = batch['target']
 
             # Forward pass to get prediction
-            _, t_latent = self.model(t, return_latent=True, return_output=False)
-
-            # Get current learning rate
-            mmd_lamdba = 2 / (1 + math.exp(-self.cfg.optimizer.mmd_lambda * (self.current_epoch / self.cfg.train.max_epochs))) - 1
+            _, t_latent = self.model(t, return_latent=True, return_output=False, maxpool=self.cfg.mmd.use_maxpool)
 
             # Calculate the loss
-            loss = self.loss_fn(y_hat, y, y_latent, t_latent, mmd_lamdba)
+            loss = self.loss_fn(y_hat, y, y_latent, t_latent, self.mmd_lambda)
         else:
             # Calculate prediction
             y_hat, _ = self.model(x)
@@ -220,6 +218,10 @@ class Runner(pl.LightningModule):
         # Set stage to train
         stage = "train"
 
+        # Update mmd lambda
+        if self.cfg.model.use_mmd and self.cfg.mmd.lambda_type == "variable":
+            self._update_lambda()
+
         # Log loss
         self._log_loss(stage)
         
@@ -318,3 +320,7 @@ class Runner(pl.LightningModule):
 
         # Log room segmentation
         self.logger.experiment.log({f"{stage}/sample {id}-{idx}": image})
+
+    def _update_lambda(self):
+        # Update the lambda value for MMD
+        self.mmd_lambda = 2 / (1 + math.exp(-self.cfg.mmd.lambda_value * (self.current_epoch / self.cfg.train.max_epochs))) - 1

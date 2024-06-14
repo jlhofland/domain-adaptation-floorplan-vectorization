@@ -13,7 +13,7 @@ debugger:
   batch_tuner: False
   anomaly: False
 model:
-  name: CubiCasaMMD # CubiCasaMMD | CubiCasa | False
+  name: CubiCasa # CubiCasaMMD | CubiCasa | CubiCasa256 | CubicasaMMD256
   input_slice: [21, 12, 11]
   loss: UncertaintyLoss # UncertaintyLoss | False
   use_mmd: True
@@ -26,7 +26,10 @@ optimizer:
   eps: 1e-08
   betas: [0.9, 0.999]
   patience: 10
-  mmd_lambda: 1
+mmd:
+  use_maxpool: True # True=[C, 1, 1] | False=[C, H, W]
+  lambda_type: constant # constant | variable | adaptive
+  lambda_value: 0.1
 train:
   batch_size: 8
   accumulate_grad_batches: 1 # effective batch size = accumulate_grad_batches * batch_size

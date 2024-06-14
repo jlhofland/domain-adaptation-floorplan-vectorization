@@ -105,7 +105,7 @@ class CubiCasaMMD(nn.Module):
                 nn.init.constant_(m.weight, 1)
                 nn.init.constant_(m.bias, 0)
 
-    def forward(self, x, return_latent=False, return_output=True):
+    def forward(self, x, return_latent=False, return_output=True, maxpool=False):
         out = self.conv1_(x)
         out = self.bn1(out)
         out = self.relu1(out)
@@ -163,10 +163,14 @@ class CubiCasaMMD(nn.Module):
         out5a = self.r54_a(out5a)
         out5a = self.r55_a(out5a) # Output: (B, 512, H/128, W/128)
 
-        # Extract the latent space
-        outlt = self.maxpoolMMD(out5a) # Output: (B, 512, 1, 1)
+        # Save the latent space representation
+        outlt = out4a
 
-        # If we do not want the prediction, return the latent space
+        # AdaptiveMaxPooling: (B, 256, H/64, W/64) -> (B, 512, 1, 1)
+        if maxpool:
+            outlt = self.maxpoolMMD(outlt)
+
+        # If we do not want the prediction, return the mean over channels
         if not return_output:
             return None, outlt
         

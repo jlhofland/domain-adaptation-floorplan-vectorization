@@ -39,7 +39,7 @@ class CubiCasa(nn.Module):
         self.r45_a = Residual(512, 512)
 
         # Use adaptive pooling to get the latent space representation
-        self.maxpool5 = nn.AdaptiveMaxPool2d((1, 1))
+        self.maxpoolMMD = nn.AdaptiveMaxPool2d((1, 1))
 
         self.upsample4 = nn.ConvTranspose2d(512, 512, kernel_size=2, stride=2) # Output: (B, 512, H/32, W/32)
         self.r41_b = Residual(256, 256)
@@ -86,7 +86,7 @@ class CubiCasa(nn.Module):
                 nn.init.constant_(m.weight, 1)
                 nn.init.constant_(m.bias, 0)
 
-    def forward(self, x, return_latent=False, return_output=True):
+    def forward(self, x, return_latent=False, return_output=True, maxpool=False):
         out = self.conv1_(x)
         out = self.bn1(out)
         out = self.relu1(out)
@@ -130,13 +130,16 @@ class CubiCasa(nn.Module):
         out4a = self.r44_a(out4a)
         out4a = self.r45_a(out4a) # Output: (B, 512, H/64, W/64)
 
-        # Use adaptive pooling to get the latent space representation
-        # (B, 256, H/64, W/64) -> (B, 512, 1, 1)
-        latent = self.maxpool5(out4a)
+        # Save the latent space representation
+        outlt = out4a
+
+        # AdaptiveMaxPooling: (B, 256, H/64, W/64) -> (B, 512, 1, 1)
+        if maxpool:
+            outlt = self.maxpoolMMD(outlt)
 
         # If we do not want the prediction, return the mean over channels
         if not return_output:
-            return None, latent
+            return None, outlt
 
         out4b = self.r41_b(out3a)
         out4b = self.r42_b(out4b)
@@ -170,7 +173,7 @@ class CubiCasa(nn.Module):
         out[:, :21] = self.sigmoid(out[:, :21])
 
         if return_latent:
-            return out, latent
+            return out, outlt
         else:
             return out, None
 
