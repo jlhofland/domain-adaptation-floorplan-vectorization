@@ -25,7 +25,10 @@ class MMDLoss(Module):
     def __init__(self, kernel=RBF(), adaptive=False):
         super().__init__()
         self.kernel = kernel
-        self.adaptive = Parameter(torch.tensor(0, requires_grad=True, dtype=torch.float32).cuda()) if adaptive else False
+        self.adaptive = adaptive
+    
+        # Certainty parameter for adaptive MMD
+        self.certainty = Parameter(torch.tensor(0, requires_grad=True, dtype=torch.float32).cuda()) if adaptive else 0
 
         # Loss variables
         self.loss_mmd = None
@@ -43,13 +46,13 @@ class MMDLoss(Module):
         # Calculate the MMD loss and update the loss variable
         self.loss_mmd   = XX - 2 * XY + YY
         self.loss_var   = lambda_mmd * (self.get_adaptive_loss() if self.adaptive else self.loss_mmd)
-        self.lambda_mmd = lambda_mmd * (torch.exp(-self.adaptive) if self.adaptive else 1)
+        self.lambda_mmd = lambda_mmd * (torch.exp(-self.certainty) if self.adaptive else 1)
 
         # Return the MMD loss
         return self.loss_var
     
     def get_adaptive_loss(self):
-        return (torch.exp(-self.adaptive) * self.loss_mmd + torch.log(1 + torch.exp(self.adaptive)))
+        return (torch.exp(-self.certainty) * self.loss_mmd + torch.log(1 + torch.exp(self.certainty)))
     
     def get_loss(self):
         return torch.tensor([

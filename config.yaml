@@ -28,10 +28,10 @@ optimizer:
 mmd:
   enable: True
   latent_channels: 512 # 512 | 256
-  latent_transformation: nn.AdaptiveMaxPool2d((1, 1)) # nn.AdaptiveMaxPool2d((1, 1)) | nn.MaxPool2d(kernel_size=2, stride=2)
+  latent_transformation: nn.AdaptiveMaxPool2d((1, 1)) # nn.AdaptiveMaxPool2d((1, 1)) | nn.AdaptiveMaxPool2d((2, 2)) 
   lambda_constant: 0.1
   lambda_variable: False # False | number (higher > steeper)
-  lambda_adaptive: False # False | True (learnable)
+  lambda_adaptive: True # False | True (learnable)
 train:
   batch_size: 8
   accumulate_grad_batches: 1 # effective batch size = accumulate_grad_batches * batch_size
