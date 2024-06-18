@@ -5,8 +5,11 @@ from models import human_pose_estimation
 from models.residual import Residual
 
 class CubiCasa(nn.Module):
-    def __init__(self, classes):
+    def __init__(self, classes, extract_at_256=False, latent_transformation=None):
         super(CubiCasa, self).__init__()
+        self.extract_at_256 = extract_at_256
+        self.latent_transformation = eval(latent_transformation) if latent_transformation else lambda x: x
+
         self.conv1_ = nn.Conv2d(3, 64, bias=True, kernel_size=7, stride=2, padding=3) # Output: (B, 64, H/2, W/2)
         self.bn1 = nn.BatchNorm2d(64)
         self.relu1 = nn.ReLU(inplace=True)
@@ -34,12 +37,9 @@ class CubiCasa(nn.Module):
         self.maxpool4 = nn.MaxPool2d(kernel_size=2, stride=2) # Output: (B, 256, H/64, W/64)
         self.r41_a = Residual(256, 256)
         self.r42_a = Residual(256, 256)
-        self.r43_a = Residual(256, 256)
+        self.r43_a = Residual(256, 256) # Output: (B, 256, H/64, W/64)
         self.r44_a = Residual(256, 512)
-        self.r45_a = Residual(512, 512)
-
-        # Use adaptive pooling to get the latent space representation
-        self.maxpoolMMD = nn.AdaptiveMaxPool2d((1, 1))
+        self.r45_a = Residual(512, 512) # Output: (B, 512, H/64, W/64)
 
         self.upsample4 = nn.ConvTranspose2d(512, 512, kernel_size=2, stride=2) # Output: (B, 512, H/32, W/32)
         self.r41_b = Residual(256, 256)
@@ -86,7 +86,7 @@ class CubiCasa(nn.Module):
                 nn.init.constant_(m.weight, 1)
                 nn.init.constant_(m.bias, 0)
 
-    def forward(self, x, return_latent=False, return_output=True, maxpool=False):
+    def forward(self, x, return_latent=False, return_output=True):
         out = self.conv1_(x)
         out = self.bn1(out)
         out = self.relu1(out)
@@ -126,20 +126,17 @@ class CubiCasa(nn.Module):
         out4a = self.maxpool4(out3a) 
         out4a = self.r41_a(out4a)
         out4a = self.r42_a(out4a)
-        out4a = self.r43_a(out4a) # Output: (B, 256, H/64, W/64)
-        out4a = self.r44_a(out4a)
+        out4x = self.r43_a(out4a) # Output: (B, 256, H/64, W/64)
+
+        out4a = self.r44_a(out4x)
         out4a = self.r45_a(out4a) # Output: (B, 512, H/64, W/64)
 
-        # Save the latent space representation
-        outlt = out4a
+        # Save the latent space representation and apply the latent transformation (if any)
+        outlt = out4x if self.extract_at_256 else out4a
+        outlt = self.latent_transformation(outlt)
 
-        # AdaptiveMaxPooling: (B, 256, H/64, W/64) -> (B, 512, 1, 1)
-        if maxpool:
-            outlt = self.maxpoolMMD(outlt)
-
-        # If we do not want the prediction, return the mean over channels
-        if not return_output:
-            return None, outlt
+        # If we don't need the output, return the latent space representation
+        if not return_output: return None, outlt
 
         out4b = self.r41_b(out3a)
         out4b = self.r42_b(out4b)

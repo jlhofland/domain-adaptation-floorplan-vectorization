@@ -18,7 +18,7 @@ class CubiCasa5K(pl.LightningDataModule):
         # Define the configuration
         self.cfg = cfg
         
-        if cfg.model.use_mmd:
+        if cfg.mmd.enable:
             self.svg_loader = FloorplanSVGMMD
             self.random_crop = RandomCropToSizeTorchMMD
             self.resize_padded = ResizePaddedTorchMMD

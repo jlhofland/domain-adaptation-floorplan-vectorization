@@ -1,21 +1,19 @@
 from models.cubicasa import CubiCasa
-from models.cubicasa256 import CubiCasa256
-from models.cubicasaMMD import CubiCasaMMD
-from models.cubicasaMMD256 import CubiCasaMMD256
+from models.cubicasa21M import CubiCasa21M
 from torch import nn
 
 
 def factory(cfg):
-    if cfg.model.name == 'CubiCasa' or cfg.model.name == 'CubiCasa256' or cfg.model.name == 'CubiCasaMMD' or cfg.model.name == 'CubiCasaMMD256':
+    if cfg.model.name == 'CubiCasa' or cfg.model.name == 'CubiCasa21M':
         # Create the model and initialize weights
-        model = eval(cfg.model.name)(51)
+        model = eval(cfg.model.name)(51, cfg.mmd.latent_channels == 256, cfg.mmd.latent_transformation)
 
         # Initialize the weights of the model
-        if cfg.model.init_weights and cfg.model.name != 'CubiCasaMMD256' and cfg.model.name != 'CubiCasaMMD':
+        if cfg.model.init_weights and cfg.model.name != 'CubiCasa21M':
             model.init_weights()
             print("Weights initialized.")
         else:
-            print("Warning: init_weights is not supported for CubiCasaMMD due to different architecture.")
+            print("Warning: init_weights is not supported for CubiCasa21M due to different architecture.")
 
         # Count the number of classes
         n_classes = sum(cfg.model.input_slice)

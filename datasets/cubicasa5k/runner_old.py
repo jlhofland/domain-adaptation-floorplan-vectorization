@@ -3,7 +3,6 @@ import torch
 import torch.nn.functional as F
 from datasets.cubicasa5k.metrics import CustomMetric
 from torch import optim
-from datasets.cubicasa5k.losses.mmd import MMDLoss
 import wandb
 import math
 
@@ -11,19 +10,14 @@ class Runner(pl.LightningModule):
     def __init__(self, cfg, model, loss_fn, labels, *args, **kwargs):
         # Initialize the LightningModule
         super().__init__()
-        self.save_hyperparameters(ignore=['model', 'loss_fn', 'loss_mmd'])
+        self.save_hyperparameters(ignore=['model', 'loss_fn'])
 
         # Set the variables
-        self.cfg      = cfg
-        self.model    = model
-        self.loss_fn  = loss_fn
-        self.loss_mmd = MMDLoss(adaptive=cfg.mmd.lambda_adaptive)
-        self.labels   = labels
-        self.mmd_lambda = self.cfg.mmd.lambda_constant * (self.calculate_lambda() if self.cfg.mmd.lambda_variable else 1)
-
-        # Create a 2 lists for source and target latent data, result should be [batch_size, C, H, W]
-        self.source_latents = []
-        self.target_latents = []
+        self.cfg     = cfg
+        self.model   = model
+        self.loss_fn = loss_fn
+        self.labels  = labels
+        self.mmd_lambda = cfg.mmd.lambda_value if cfg.model.use_mmd else 0
 
         # Losses for logging
         self.losses = {
@@ -52,10 +46,6 @@ class Runner(pl.LightningModule):
         params = [{'params': self.model.parameters(), 'lr': self.cfg.optimizer.lr},
                   {'params': self.loss_fn.parameters(), 'lr': self.cfg.optimizer.lr}]
         
-        # If we use MMD, also add the MMD loss parameters
-        if self.cfg.mmd.enable and self.cfg.mmd.lambda_adaptive:
-            params.append({'params': self.loss_mmd.parameters(), 'lr': self.cfg.optimizer.lr})
-        
         # Create optimizer
         optimizer = optim.Adam(params, eps=self.cfg.optimizer.eps, betas=self.cfg.optimizer.betas)
 
@@ -79,26 +69,25 @@ class Runner(pl.LightningModule):
         x = batch['image']
         y = batch['label']
 
-        # Calculate the prediction and latent space
-        y_hat, y_lat = self.model(x, return_latent=1)
+        # If we have target data, calculate the loss using MMD
+        if 'target' in batch and self.cfg.model.use_mmd:
+            # Forward pass to get prediction
+            y_hat, y_latent = self.model(x, return_latent=True, maxpool=self.cfg.mmd.use_maxpool)
 
-        # Calculate the loss
-        loss = self.loss_fn(y_hat, y)
-        
-        # If we have target data, also get the latent space representations
-        if 'target' in batch and self.cfg.mmd.enable:
-            _, t_lat = self.model(batch['target'], return_latent=1, return_output=0)
+            # Get target image
+            t = batch['target']
 
-            # Flatten: [batch_size, C, H/64, W/64] --> [batch_size, C*H/64*W/64]
-            y_lat = y_lat.view(y_lat.size(0), -1)
-            t_lat = t_lat.view(t_lat.size(0), -1)
-            
-            # If we have more than one sample in the batch, calculate the MMD loss (required for MMD loss)
-            if x.shape[0] > 1:
-                loss += self.loss_mmd(y_lat, t_lat, self.mmd_lambda)
-            else:
-                self.source_latents.append(y_lat)
-                self.target_latents.append(t_lat)
+            # Forward pass to get prediction
+            _, t_latent = self.model(t, return_latent=True, return_output=False, maxpool=self.cfg.mmd.use_maxpool)
+
+            # Calculate the loss
+            loss = self.loss_fn(y_hat, y, y_latent, t_latent, self.mmd_lambda)
+        else:
+            # Calculate prediction
+            y_hat, _ = self.model(x)
+
+            # Calculate the loss
+            loss = self.loss_fn(y_hat, y)
 
         # Return loss and predictions
         return loss, y_hat, y
@@ -162,31 +151,12 @@ class Runner(pl.LightningModule):
     ##    STEPPING fuctions     ##
     ##                          ##
     ##############################
-    def on_train_epoch_start(self):
-        # Update MMD lamdba if we use variable lambda
-        self.mmd_lambda = self.cfg.mmd.lambda_constant * (self.calculate_lambda() if self.cfg.mmd.lambda_variable else 1)
-
     def training_step(self, batch, batch_idx):
         # Forward pass
         loss, _, _ = self._step(batch)
 
-        # Get losses
-        losses = self.loss_fn.get_loss()
-
-        # If we use MMD add the MMD loss to the total loss
-        if self.cfg.mmd.enable:
-            # Get the MMD losses
-            mmd_losses = self.loss_mmd.get_loss()
-
-            # Append the MMD losses to the losses list
-            losses = torch.cat((losses, mmd_losses))
-
-            # Add loss and scaled loss to the total loss
-            losses[0] += mmd_losses[0]
-            losses[1] += mmd_losses[1]
-
         # Log step-level loss, then append to list for epoch-level loss
-        self.losses["train"].append(losses)
+        self.losses["train"].append(self.loss_fn.get_loss())
 
         # Return loss for logging
         return loss
@@ -247,7 +217,11 @@ class Runner(pl.LightningModule):
     def on_train_epoch_end(self):
         # Set stage to train
         stage = "train"
-        
+
+        # Update mmd lambda
+        if self.cfg.model.use_mmd and self.cfg.mmd.lambda_type == "variable":
+            self._update_lambda()
+
         # Log loss
         self._log_loss(stage)
         
@@ -303,33 +277,14 @@ class Runner(pl.LightningModule):
 
     def _log_loss(self, stage):
         # Stack losses and calculate average
-        ccd_losses = torch.stack(self.losses[stage], dim=0)
-        avg_losses = torch.mean(ccd_losses, dim=0)
-
-        # If we use MMD, calculate the MMD loss and add it to the total loss
-        if stage in ("val") and self.cfg.mmd.enable:
-            # Stack source and target latent data
-            mmd_sources = torch.cat(self.source_latents, dim=0)
-            mmd_targets = torch.cat(self.target_latents, dim=0)
-
-            # Calculate the MMD loss over entire epoch
-            self.loss_mmd(mmd_sources, mmd_targets, self.mmd_lambda)
-
-            # Get losses and concatenate to averages
-            mmd_losses = self.loss_mmd.get_loss()
-            avg_losses = torch.cat((avg_losses, mmd_losses))
-
-            # Add mmd parts to the total loss
-            avg_losses[0] += mmd_losses[0]
-            avg_losses[1] += mmd_losses[1]
+        stacked = torch.stack(self.losses[stage], dim=0)
+        average = torch.mean(stacked, dim=0)
 
         # Zip labels["loss"] and average to log
-        self.log_dict({stage + "/" + metric: value for metric, value in zip(self.labels["loss"], avg_losses)})
+        self.log_dict({stage + "/" + metric: value for metric, value in zip(self.labels["loss"], average)})
 
         # Reset losses
-        self.losses[stage]  = []
-        self.source_latents = []
-        self.target_latents = []
+        self.losses[stage] = []
 
     def _log_sample(self, heats_pred, heats_label, rooms_pred, rooms_label, icons_pred, icons_label, batch, id, idx, stage, ls):
         # Create class labels
@@ -339,7 +294,7 @@ class Runner(pl.LightningModule):
 
         image = wandb.Image(
             batch['image'][id], 
-            caption=f"L: {ls[1]:.2f},  R: {ls[3]:.2f}, I: {ls[6]:.2f}, H: {ls[9]:.2f}",
+            caption=f"L: {ls[1]:.2f},  R: {ls[3]:.2f}, I: {ls[6]:.2f}, H: {ls[9]:.2f} M: {ls[11]:.2f}",
             masks={
                 "room_predictions": {
                     "mask_data": rooms_pred[id].cpu().detach().numpy(),
@@ -366,5 +321,6 @@ class Runner(pl.LightningModule):
         # Log room segmentation
         self.logger.experiment.log({f"{stage}/sample {id}-{idx}": image})
 
-    def calculate_lambda(self):
-        return (2 / (1 + math.exp(-self.cfg.mmd.lambda_variable * (self.current_epoch / self.cfg.train.max_epochs))) - 1)
+    def _update_lambda(self):
+        # Update the lambda value for MMD
+        self.mmd_lambda = 2 / (1 + math.exp(-self.cfg.mmd.lambda_value * (self.current_epoch / self.cfg.train.max_epochs))) - 1

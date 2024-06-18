@@ -2,21 +2,20 @@ seed: 0
 wandb:
   log: True
   dir: C:\Users\j.a.hofland\Documents\thesis-coding\pytorch-lightning-example\runs
-  experiment_name: CC21M_MMD_100E_B20_S1
+  experiment_name: TEST
   entity: hofland-jeroen
   project: cc5k
 debugger:
-  batches: 5 # number | False
+  batches: False # number | False
   profiler: SimpleProfiler # SimpleProfiler | AdvancedProfiler | False
   dir: C:\Users\j.a.hofland\Documents\thesis-coding\pytorch-lightning-example\debugging
   accelerator: False
   batch_tuner: False
   anomaly: False
 model:
-  name: CubiCasa # CubiCasaMMD | CubiCasa | CubiCasa256 | CubicasaMMD256
+  name: CubiCasa # CubiCasa | CubiCasa21M
   input_slice: [21, 12, 11]
   loss: UncertaintyLoss # UncertaintyLoss | False
-  use_mmd: True
   weights: False # path | False
   watch: False
   init_weights: True
@@ -27,9 +26,12 @@ optimizer:
   betas: [0.9, 0.999]
   patience: 10
 mmd:
-  use_maxpool: True # True=[C, 1, 1] | False=[C, H, W]
-  lambda_type: constant # constant | variable | adaptive
-  lambda_value: 0.1
+  enable: True
+  latent_channels: 512 # 512 | 256
+  latent_transformation: nn.AdaptiveMaxPool2d((1, 1)) # nn.AdaptiveMaxPool2d((1, 1)) | nn.MaxPool2d(kernel_size=2, stride=2)
+  lambda_constant: 0.1
+  lambda_variable: False # False | number (higher > steeper)
+  lambda_adaptive: False # False | True (learnable)
 train:
   batch_size: 8
   accumulate_grad_batches: 1 # effective batch size = accumulate_grad_batches * batch_size
@@ -41,11 +43,11 @@ train:
     hours: 0
     minutes: 0
   debug:
-    enable: False
+    enable: True
     print: False
-    train_batches: 50 # number | False
-    val_batches: 50 # number | False
-    test_batches: 50 # number | False
+    train_batches: 25 # number | False
+    val_batches: 25 # number | False
+    test_batches: 25 # number | False
 test:
   weights: False # path | False
   data: test_hqa.txt
