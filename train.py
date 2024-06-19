@@ -50,7 +50,7 @@ def main():
         save_dir=cfg.wandb.dir,
         project=cfg.wandb.project,
         name=cfg.wandb.experiment_name,
-        log_model='all' if cfg.wandb.log else None,
+        log_model=cfg.wandb.log,
         offline=not cfg.wandb.log,
         entity=cfg.wandb.entity,
         config=OmegaConf.to_object(cfg),

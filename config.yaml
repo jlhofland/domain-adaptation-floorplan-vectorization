@@ -30,8 +30,8 @@ mmd:
   latent_channels: 512 # 512 | 256
   latent_transformation: nn.AdaptiveMaxPool2d((1, 1)) # nn.AdaptiveMaxPool2d((1, 1)) | nn.AdaptiveMaxPool2d((2, 2)) 
   lambda_constant: 0.1
-  lambda_variable: False # False | number (higher > steeper)
-  lambda_adaptive: True # False | True (learnable)
+  lambda_variable: 5 # False | number (higher > steeper)
+  lambda_adaptive: False # False | True (learnable)
 train:
   batch_size: 8
   accumulate_grad_batches: 1 # effective batch size = accumulate_grad_batches * batch_size
@@ -49,8 +49,8 @@ train:
     val_batches: 25 # number | False
     test_batches: 25 # number | False
 test:
-  weights: False # path | False
-  data: test_hqa.txt
+  weights: weights\RGB400B20.ckpt # path | False
+  data: test_c.txt
 dataset:
   name: cubicasa
   num_workers: 4 # 10 (local) | 0.5 * cpus (cluster)
