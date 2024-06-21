@@ -56,6 +56,11 @@ def main():
         config=OmegaConf.to_object(cfg),
     )
 
+    # Download weights as artifact from W&B
+    if cfg.wandb.weights:
+        artifact_dir = wandb_logger.download_artifact(f"hofland-jeroen/cc5k/{cfg.wandb.weights}:best", artifact_type="model", save_dir=cfg.wandb.dir)
+        cfg.model.weights = os.path.join(artifact_dir, "model.ckpt")
+
     # Add labels to the logger
     labels = {
         "loss": [

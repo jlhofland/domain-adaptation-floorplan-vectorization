@@ -5,6 +5,7 @@ wandb:
   experiment_name: TEST
   entity: hofland-jeroen
   project: cc5k
+  weights: model-g5wg0reo # ID for reference hofland-jeroen/cc5k/{weights}:best
 debugger:
   batches: False # number | False
   profiler: SimpleProfiler # SimpleProfiler | AdvancedProfiler | False
@@ -36,7 +37,7 @@ train:
   batch_size: 8
   accumulate_grad_batches: 1 # effective batch size = accumulate_grad_batches * batch_size
   resume: False # path | False 
-  max_epochs: 5
+  max_epochs: 2
   max_time:
     enable: False
     days: 0
@@ -49,7 +50,7 @@ train:
     val_batches: 25 # number | False
     test_batches: 25 # number | False
 test:
-  weights: weights\RGB400B20.ckpt # path | False
+  weights: False # path | False
   data: test_c.txt
 dataset:
   name: cubicasa
@@ -63,7 +64,7 @@ dataset:
   overwrite: False
   save_samples: False
   load_samples: True
-  scale: True
+  scale: False
   image_size: 256
   val_size: False
   files:
