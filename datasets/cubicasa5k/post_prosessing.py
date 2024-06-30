@@ -348,7 +348,14 @@ def merge_rectangles(rectangles, room_types):
     return room_polygons, new_room_types
 
 def get_polygons(predictions, threshold, all_opening_types):
-    heatmaps, room_seg, icon_seg = predictions
+    heatmaps, room_seg, icon_seg = predictions 
+
+    ## ADDED SQUEEZE ##
+    heatmaps = heatmaps.squeeze().data.cpu().numpy()
+    room_seg = room_seg.squeeze().data.cpu().numpy()
+    icon_seg = icon_seg.squeeze().data.cpu().numpy()
+    ###################
+
     height = icon_seg.shape[1]
     width = icon_seg.shape[2]
 
@@ -1057,9 +1064,9 @@ def split_prediction(tensor, shape, split):
     icons = F.softmax(icons, 0)
     rooms = F.softmax(rooms, 0)
 
-    heatmaps = heatmaps.data.numpy()
-    icons = icons.data.numpy()
-    rooms = rooms.data.numpy()
+    heatmaps = heatmaps.data.cpu().numpy()
+    icons = icons.data.cpu().numpy()
+    rooms = rooms.data.cpu().numpy()
 
     return heatmaps, rooms, icons
 

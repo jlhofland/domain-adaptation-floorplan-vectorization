@@ -1,7 +1,7 @@
 """
-PyTorch Lightning example code, designed for use in TU Delft CV lab.
+PyTorch Lightning code for training and testing the CubiCasa5K dataset and models.
 
-Copyright (c) 2022 Robert-Jan Bruintjes, TU Delft.
+Copyright (c) 2024 Jeroen Hofland, TU Delft.
 """
 # Package imports, from conda or pip
 import os
@@ -58,8 +58,13 @@ def main():
 
     # Download weights as artifact from W&B
     if cfg.wandb.weights:
-        artifact_dir = wandb_logger.download_artifact(f"hofland-jeroen/cc5k/{cfg.wandb.weights}:best", artifact_type="model", save_dir=cfg.wandb.dir)
+        # Create artifact directory
+        save_dir = os.path.join(cfg.wandb.dir, cfg.wandb.weights)
+        os.makedirs(save_dir, exist_ok=True)
+        artifact_dir = wandb_logger.download_artifact(f"hofland-jeroen/cc5k/{cfg.wandb.weights}:best", artifact_type="model", save_dir=save_dir)
         cfg.model.weights = os.path.join(artifact_dir, "model.ckpt")
+        if cfg.test.weights:
+            cfg.test.weights  = os.path.join(artifact_dir, "model.ckpt")
 
     # Add labels to the logger
     labels = {
@@ -72,13 +77,19 @@ def main():
         ],
         "room": ["Background", "Outdoor", "Wall", "Kitchen", "Living Room" ,"Bed Room", "Bath", "Entry", "Railing", "Storage", "Garage", "Undefined"],
         "icon": ["No Icon", "Window", "Door", "Closet", "Electrical Applience" ,"Toilet", "Sink", "Sauna Bench", "Fire Place", "Bathtub", "Chimney"],
-        "heat": ["I-UP", "I-RIGHT", "I-DOWN", "I-LEFT", # I junctions
+        "heat": ["No junction", 
+                 "I-UP", "I-RIGHT", "I-DOWN", "I-LEFT", # I junctions
                  "L-UP-RIGHT", "L-RIGHT-DOWN", "L-DOWN-LEFT", "L-LEFT-UP", # L junctions
                  "T-LEFT-UP-RIGHT", "T-UP-RIGHT-DOWN", "T-RIGHT-DOWN-LEFT", "T-DOWN-LEFT-UP", # T junctions
                  "X-UP-RIGHT-DOWN-LEFT", # X junction
                  "O-UP", "O-RIGHT", "O-DOWN", "O-LEFT", # O(pening) junctions
                  "ICON-UP-RIGHT", "ICON-RIGHT-DOWN", "ICON-DOWN-LEFT", "ICON-LEFT-UP"] # ICON junctions
     }
+
+    # Exclude certain classes from the confusion matrix
+    if cfg.test.exclude_classes.enable:
+        labels["room_eval"] = [label for i, label in enumerate(labels["room"]) if i not in cfg.test.exclude_classes.rooms]
+        labels["icon_eval"] = [label for i, label in enumerate(labels["icon"]) if i not in cfg.test.exclude_classes.icons]
 
     # Create loss function
     loss_fn = loss_factory.factory(cfg)
@@ -151,7 +162,7 @@ def main():
         trainer.test(runner, dataset.test_dataloader(cfg.dataset.files.test.d3))
     else:
         # Test the model
-        trainer.test(runner, dataset.test_dataloader(cfg.test.data), ckpt_path=cfg.test.weights)
+        trainer.test(runner, dataset.test_dataloader(cfg.test.data, pre_load=True), ckpt_path=cfg.test.weights)
 
 
 if __name__ == '__main__':

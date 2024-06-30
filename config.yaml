@@ -2,13 +2,13 @@ seed: 0
 wandb:
   log: True
   dir: C:\Users\j.a.hofland\Documents\thesis-coding\pytorch-lightning-example\runs
-  experiment_name: TEST
+  experiment_name: NAME
   entity: hofland-jeroen
   project: cc5k
-  weights: model-g5wg0reo # ID for reference hofland-jeroen/cc5k/{weights}:best
+  weights: model-egtpv2r8 # ID for reference hofland-jeroen/cc5k/{weights}:best
 debugger:
   batches: False # number | False
-  profiler: SimpleProfiler # SimpleProfiler | AdvancedProfiler | False
+  profiler: AdvancedProfiler # SimpleProfiler | AdvancedProfiler | False
   dir: C:\Users\j.a.hofland\Documents\thesis-coding\pytorch-lightning-example\debugging
   accelerator: False
   batch_tuner: False
@@ -28,33 +28,40 @@ optimizer:
   patience: 10
 mmd:
   enable: True
-  latent_channels: 512 # 512 | 256
-  latent_transformation: nn.AdaptiveMaxPool2d((1, 1)) # nn.AdaptiveMaxPool2d((1, 1)) | nn.AdaptiveMaxPool2d((2, 2)) 
+  latent_channels: 256 # 512 | 
+  latent_transformation: nn.AdaptiveMaxPool2d((4, 4)) # nn.AdaptiveMaxPool2d((1, 1)) | nn.AdaptiveMaxPool2d((2, 2)) 
   lambda_constant: 0.1
-  lambda_variable: 5 # False | number (higher > steeper)
+  lambda_variable: False # False | number (higher > steeper)
   lambda_adaptive: False # False | True (learnable)
 train:
   batch_size: 8
   accumulate_grad_batches: 1 # effective batch size = accumulate_grad_batches * batch_size
   resume: False # path | False 
-  max_epochs: 2
+  max_epochs: 1
   max_time:
     enable: False
     days: 0
     hours: 0
     minutes: 0
   debug:
-    enable: True
+    enable: False
     print: False
     train_batches: 25 # number | False
     val_batches: 25 # number | False
-    test_batches: 25 # number | False
+    test_batches: 66 # number | False
 test:
   weights: False # path | False
   data: test_c.txt
+  heatmap_threshold: 0.4
+  experiment_variable: Lambda (C)
+  experiment_measure: self.cfg.mmd.lambda_constant
+  exclude_classes:
+    enable: True
+    rooms: [10] # [10: Garage]
+    icons: [8, 9, 10] # [8: Fire Place, 9: Bathtub, 10: Chimney]
 dataset:
   name: cubicasa
-  num_workers: 4 # 10 (local) | 0.5 * cpus (cluster)
+  num_workers: 2 # 10 (local) | 0.5 * cpus (cluster)
   format: txt # lmdb or txt
   augmentations: True
   original_size: True

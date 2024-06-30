@@ -1,11 +1,14 @@
 import pytorch_lightning as pl
 import torch
 import torch.nn.functional as F
-from datasets.cubicasa5k.metrics import CustomMetric
+from datasets.cubicasa5k.metrics import CustomMetric, polygons_to_tensor
 from torch import optim
 from datasets.cubicasa5k.losses.mmd import MMDLoss
 import wandb
 import math
+from datasets.cubicasa5k.post_prosessing import get_polygons
+from datasets.cubicasa5k.loaders.augmentations import RotateNTurns
+import numpy as np
 
 class Runner(pl.LightningModule):
     def __init__(self, cfg, model, loss_fn, labels, *args, **kwargs):
@@ -33,12 +36,16 @@ class Runner(pl.LightningModule):
         }
 
         # Validation scores
-        self.val_score_rooms = CustomMetric(cfg.model.input_slice[1])
-        self.val_score_icons = CustomMetric(cfg.model.input_slice[2])
+        self.val_score_rooms = CustomMetric(cfg.model.input_slice[1], exclude_classes=cfg.test.exclude_classes.rooms)
+        self.val_score_icons = CustomMetric(cfg.model.input_slice[2], exclude_classes=cfg.test.exclude_classes.icons)
 
         # Testing scores
-        self.test_score_rooms = CustomMetric(cfg.model.input_slice[1])
-        self.test_score_icons = CustomMetric(cfg.model.input_slice[2])
+        self.test_score_rooms = CustomMetric(cfg.model.input_slice[1], exclude_classes=cfg.test.exclude_classes.rooms)
+        self.test_score_icons = CustomMetric(cfg.model.input_slice[2], exclude_classes=cfg.test.exclude_classes.icons)
+
+        # Testing scores for polygons
+        self.test_score_pol_rooms = CustomMetric(cfg.model.input_slice[1], exclude_classes=cfg.test.exclude_classes.rooms)
+        self.test_score_pol_icons = CustomMetric(cfg.model.input_slice[2], exclude_classes=cfg.test.exclude_classes.icons)
 
     def forward(self, x, return_latent=False, return_output=True):
         # Runner needs to redirect any model.forward() calls to the actual network
@@ -102,30 +109,88 @@ class Runner(pl.LightningModule):
 
         # Return loss and predictions
         return loss, y_hat, y
-    
-    def _retrieve(self, y_hat, y):
-        # Select rooms and icons from the prediction
-        # y_hat = [batch_size, [heatmaps, rooms, icons], height, width] = [1, [21, 13, 17], H, W]
-        heats_pred, rooms_pred, icons_pred = torch.split(y_hat[0], tuple(self.cfg.model.input_slice), dim=0)
 
-        # Filter out the heatmaps with > 0.8 confidence
-        heats_pred = heats_pred * (heats_pred > 0.5)
+    def _step_rotate(self, batch):
+        # Transfer data to GPU
+        x = batch['image']
+        y = batch['label']
+
+        # Get image size
+        batch_size, channels, height, width = x.shape
+        img_size = (height, width)
+
+        # Rotate the image
+        rot = RotateNTurns()
+        rotations = [(0, 0), (1, -1), (2, 2), (-1, 1)]
+        class_count = sum(self.cfg.model.input_slice)
+
+        # Create prediction tensor
+        pred = torch.zeros([len(rotations), class_count, height, width], device=y.device)
+
+        # For each rotation, rotate the image and predict
+        for i, r in enumerate(rotations):
+            forward, back = r
+            # We rotate first the image
+            rot_image = rot(x, 'tensor', forward)
+
+            # We predict
+            y_hat, y_lat = self.model(rot_image) # [batch_size, channels, height, width]
+
+            # We rotate prediction back
+            y_hat = rot(y_hat, 'tensor', back) 
+
+            # We fix heatmaps
+            y_hat = rot(y_hat, 'points', back)
+
+            # We make sure the size is correct
+            y_hat = F.interpolate(y_hat, size=img_size, mode='bilinear', align_corners=True)
+
+            # We add the prediction to output
+            pred[i] = y_hat[0] # [channels, height, width]
+
+        # Calculate loss and prediction over all rotations
+        y_rep = y.repeat(len(rotations), 1, 1, 1) # [pred_count, channels, height, width]
+        loss  = self.loss_fn(pred, y_rep) 
+        pred  = torch.mean(pred, 0, True) # [1, channels, height, width]
+
+        # Interpolate the prediction to the original size and move to CPU
+        pred = F.interpolate(pred, size=img_size, mode='bilinear', align_corners=False) #.cpu()
+
+        # Split the tensor into heatmaps, rooms and icons
+        heats, rooms, icons = torch.split(pred, tuple(self.cfg.model.input_slice), 1)
+
+        # Take softmax of the rooms and icons
+        icons = F.softmax(icons, dim=1)
+        rooms = F.softmax(rooms, dim=1)
+
+        # Make copy of heats
+        seg_heats = heats.clone()
+
+        # Add background to the heats
+        background = torch.full((batch_size, 1, height, width), self.cfg.test.heatmap_threshold, device=heats.device)
+        seg_heats = torch.cat((background, seg_heats), dim=1)
+
+        # Get segmentation classes
+        seg_heats = torch.argmax(seg_heats, dim=1)
+        seg_rooms = torch.argmax(rooms, dim=1)
+        seg_icons = torch.argmax(icons, dim=1)
+
+        # Get polygons of the prediction using (predictions, threshold, opening_ids)
+        pol_pred = polygons_to_tensor(*get_polygons((heats, rooms, icons), threshold=self.cfg.test.heatmap_threshold, all_opening_types=[1, 2]), img_size)
+
+        # Get the polygon segmentation classes
+        rooms = torch.tensor(pol_pred[:self.cfg.model.input_slice[1]], device=seg_rooms.device).unsqueeze(0)
+        icons = torch.tensor(pol_pred[self.cfg.model.input_slice[1]:], device=seg_icons.device).unsqueeze(0)
         
-        # Take the argmax of the rooms and icons
-        heats_pred_max = torch.argmax(heats_pred, dim=0)
-        rooms_pred_max = torch.argmax(rooms_pred, dim=0)
-        icons_pred_max = torch.argmax(icons_pred, dim=0)
+        # Get the polygon segmentation classes and converge to tensor
+        pol_rooms = torch.argmax(rooms, dim=1)
+        pol_icons = torch.argmax(icons, dim=1)
 
-        # Resize y to match y_hat
-        y = F.interpolate(y, size=y_hat.shape[2:], mode='bilinear', align_corners=False)
+        # Remove heatmaps from the labels and move to seg_rooms and seg_icons device
+        labels = y[:, self.cfg.model.input_slice[0]:].to(seg_rooms.device)
 
-        # Select rooms and icons from the label
-        # y = [batch_size, [heatmaps, room_class, icon_class], height, width] = [1, [21,  1,  1], H, W]
-        rooms_label = y[0, self.cfg.model.input_slice[0]]
-        icons_label = y[0, self.cfg.model.input_slice[0]+1]
-
-        # Return the predictions and labels
-        return (heats_pred_max, None), (rooms_pred_max, rooms_label), (icons_pred_max, icons_label)
+        # Return the labels, segmentation and polygon segmentation
+        return (seg_heats, None), (seg_rooms, labels[:, 0]), (seg_icons, labels[:, 1]), (pol_rooms, labels[:, 0]), (pol_icons, labels[:, 1]), loss
 
     def _retrieve_batch(self, y_hat, y):
         # Assume y_hat and y have shapes:
@@ -134,10 +199,17 @@ class Runner(pl.LightningModule):
 
         # Split based on the configured slices
         input_slices = tuple(self.cfg.model.input_slice)
-        heats_pred, rooms_pred, icons_pred = torch.split(y_hat, input_slices, dim=1)
+        heats_pred, rooms_pred, icons_pred = torch.split(y_hat, input_slices, dim=1) # [batch_size, channels, height, width]
 
-        # Filter out the heatmaps with > 0.5 confidence across all batches
-        heats_pred = heats_pred * (heats_pred > 0.5)
+        # Filter out the heatmaps with a certain confidence across all batches
+        heats_pred = heats_pred * (heats_pred > self.cfg.test.heatmap_threshold)
+
+        # Get the image size
+        batch_size, channels, height, width = y_hat.shape
+
+        # Add background to the heats
+        background = torch.full((batch_size, 1, height, width), self.cfg.test.heatmap_threshold, device=heats_pred.device)
+        heats_pred = torch.cat((background, heats_pred), dim=1)
 
         # Take the argmax of the rooms and icons across channel dimensions
         heats_pred_max = torch.argmax(heats_pred, dim=1)
@@ -216,25 +288,26 @@ class Runner(pl.LightningModule):
         return loss
 
     def test_step(self, batch, batch_idx):
-        # Forward pass
-        loss, y_hat, y = self._step(batch)
-
-        # Retrieve predictions and labels
-        heats, rooms, icons = self._retrieve_batch(y_hat, y)
-
+        # Get labels and predictions from _step_rotate
+        heats, rooms, icons, pol_rooms, pol_icons, loss = self._step_rotate(batch)
+        
         # Update metrics
         self.test_score_rooms.update(*rooms)
         self.test_score_icons.update(*icons)
+
+        # Update polygon metrics
+        self.test_score_pol_rooms.update(*pol_rooms)
+        self.test_score_pol_icons.update(*pol_icons)
 
         # Get losses
         losses = self.loss_fn.get_loss()
 
         # For all images in the batch, log sample
         for i in range(batch['image'].shape[0]):
-            self._log_sample(*heats, *rooms, *icons, batch, i, batch_idx, "test/samples", losses)
+            self._log_sample(*heats, *rooms, *icons, batch, i, batch_idx, "test/samples", losses, *pol_rooms, *pol_icons)
 
-        # Get losses and weights
-        self.losses["test"].append(losses)
+        # Clear memory
+        torch.cuda.empty_cache()
 
         # Return loss for logging
         return loss
@@ -278,10 +351,13 @@ class Runner(pl.LightningModule):
         rooms = self.test_score_rooms.compute()
         icons = self.test_score_icons.compute()
 
+        # Calculate polygon scores
+        pol_rooms = self.test_score_pol_rooms.compute()
+        pol_icons = self.test_score_pol_icons.compute()
+
         # Log loss and scores
-        self._log_loss(stage)
-        self._log_scores(*rooms, stage, "room")
-        self._log_scores(*icons, stage, "icon")
+        self._log_scores(*rooms, stage, "room", *pol_rooms)
+        self._log_scores(*icons, stage, "icon", *pol_icons)
 
         # Reset test loss, and clear GPU memory
         torch.cuda.empty_cache()
@@ -291,15 +367,48 @@ class Runner(pl.LightningModule):
     ##    LOGGING functions     ##
     ##                          ##
     ##############################
-    def _log_scores(self, score, class_core, stage, group):
+    def _log_scores(self, score, class_score, stage, group, pol_score=None, pol_class_score=None):
+        # Label group
+        label_group = group + "_eval"
+
         # Log scores for each metric
         for metric, value in score.items():
             self.log(f"{stage}/{group}/{metric}", value)
 
         # Log scores for each class
-        for metric, dict in class_core.items():
-            for cls, value in dict.items():
-                self.log(f"{stage}/{group}/{metric}/{cls} {self.labels[group][int(cls)]}", value)
+        for metric, cls_dict in class_score.items():
+            for cls, value in cls_dict.items():
+                self.log(f"{stage}/{group}/{metric}/{cls} {self.labels[label_group][int(cls)]}", value)
+
+        # Log polygon scores
+        if pol_score is not None:
+            data_score, data_class = [eval(self.cfg.test.experiment_measure)], []
+            cols_score, cols_class = [self.cfg.test.experiment_variable], []
+
+            # Ensure pol_score and pol_class_score have matching keys with score and class_score
+            for metric, value in score.items():
+                if metric in pol_score:
+                    data_score.extend([value, pol_score[metric]])
+                    cols_score.extend([f"{metric} (seg)", f"{metric} (vec)"])
+                else:
+                    raise KeyError(f"Polygon score for metric '{metric}' is missing.")
+
+            for metric, cls_dict in class_score.items():
+                data, cols = [eval(self.cfg.test.experiment_measure), metric], [self.cfg.test.experiment_variable, "metric"]
+                for cls, value in cls_dict.items():
+                    name_metric = self.labels[label_group][int(cls)]
+                    data.extend([value, pol_class_score[metric].get(cls, None)])
+                    cols.extend([f"{name_metric} (seg)", f"{name_metric} (vec)"])
+                data_class.append(data)
+                cols_class = cols
+
+            # Log tables
+            self.logger.experiment.log({
+                f"{stage}/{group}/table/scores_classes": wandb.Table(data=[data_score], columns=cols_score),
+                f"{stage}/{group}/table/scores": wandb.Table(data=data_class, columns=cols_class)
+            })
+
+
 
     def _log_loss(self, stage):
         # Stack losses and calculate average
@@ -331,22 +440,21 @@ class Runner(pl.LightningModule):
         self.source_latents = []
         self.target_latents = []
 
-    def _log_sample(self, heats_pred, heats_label, rooms_pred, rooms_label, icons_pred, icons_label, batch, id, idx, stage, ls):
+    def _log_sample(self, heats_pred, heats_label, rooms_pred, rooms_label, icon_pred, icon_label, batch, id, batch_idx, 
+                    stage, losses, pol_rooms_pred=None, pol_rooms_label=None, pol_icons_pred=None, pol_icons_label=None):
+    
         # Create class labels
         class_heats = {index: value for index, value in enumerate(self.labels["heat"])}
         class_rooms = {index: value for index, value in enumerate(self.labels["room"])}
         class_icons = {index: value for index, value in enumerate(self.labels["icon"])}
 
-        image = wandb.Image(
-            batch['image'][id], 
-            caption=f"L: {ls[1]:.2f},  R: {ls[3]:.2f}, I: {ls[6]:.2f}, H: {ls[9]:.2f}",
-            masks={
+        mask_dict = {
                 "room_predictions": {
                     "mask_data": rooms_pred[id].cpu().detach().numpy(),
                     "class_labels": class_rooms
                 },
                 "icon_predictions": {
-                    "mask_data": icons_pred[id].cpu().detach().numpy(),
+                    "mask_data": icon_pred[id].cpu().detach().numpy(),
                     "class_labels": class_icons
                 },
                 "heat_predictions": {
@@ -358,13 +466,25 @@ class Runner(pl.LightningModule):
                     "class_labels": class_rooms
                 },
                 "icon_label": {
-                    "mask_data": icons_label[id].cpu().detach().numpy(),
+                    "mask_data": icon_label[id].cpu().detach().numpy(),
                     "class_labels": class_icons
                 }
-        })
+        }
+
+        if pol_rooms_pred is not None:
+            mask_dict["pol_room_predictions"] = {
+                "mask_data": pol_rooms_pred[id].cpu().detach().numpy(),
+                "class_labels": class_rooms
+            }
+            mask_dict["pol_icon_predictions"] = {
+                "mask_data": pol_icons_pred[id].cpu().detach().numpy(),
+                "class_labels": class_icons
+            }
+
+        image = wandb.Image(batch['image'][id], caption=f"L: {losses[1]:.2f},  R: {losses[3]:.2f}, I: {losses[6]:.2f}, H: {losses[9]:.2f}", masks=mask_dict)
 
         # Log room segmentation
-        self.logger.experiment.log({f"{stage}/sample {id}-{idx}": image})
+        self.logger.experiment.log({f"{stage}/sample {id}-{batch_idx}": image})
 
     def calculate_lambda(self):
         return (2 / (1 + math.exp(-self.cfg.mmd.lambda_variable * (self.current_epoch / self.cfg.train.max_epochs))) - 1)

@@ -1,33 +1,17 @@
 import torch
 import torchmetrics as tm
 import torch.nn.functional as F
+import numpy as np
+from skimage import draw
+from shapely.geometry import Polygon
+from datasets.cubicasa5k.plotting import shp_mask
 
 class CustomMetric(tm.Metric):
-    def __init__(self, n_classes):
+    def __init__(self, n_classes, exclude_classes=[]):
         super().__init__()
-        # Initialize the confusion matrix with zeros
-        self.add_state("confusion_matrix", default=torch.zeros((n_classes, n_classes), dtype=torch.long), dist_reduce_fx="sum")
+        self.add_state("confusion_matrix", default=torch.zeros((n_classes, n_classes)), dist_reduce_fx="sum")
         self.n_classes = n_classes
-
-    def update_s(self, preds: torch.Tensor, target: torch.Tensor):
-        # Flatten the predictions and targets
-        preds, target = preds.flatten(), target.flatten()
-
-        # Apply the mask to select valid target indices
-        mask = (target >= 0) & (target < self.n_classes)
-        target, preds = target[mask], preds[mask]
-
-        # Calculate the indices for the flattened matrix
-        indices = self.n_classes * target.long() + preds.long()
-
-        # Initialize the histogram with zeros
-        hist = torch.zeros((self.n_classes ** 2,), dtype=torch.long, device=target.device)
-
-        # Increment the appropriate bins in the histogram
-        hist.scatter_add_(0, indices, torch.ones_like(indices, dtype=torch.long))
-
-        # Increment the confusion matrix
-        self.confusion_matrix += hist.reshape(self.n_classes, self.n_classes)
+        self.exclude_classes = exclude_classes
 
     def update(self, preds: torch.Tensor, target: torch.Tensor):
         # Ensure preds and target are in the correct shape, typically [batch_size, ...]
@@ -40,8 +24,7 @@ class CustomMetric(tm.Metric):
         mask = (target >= 0) & (target < self.n_classes)
         
         # We only want to keep data where mask is True
-        preds = preds[mask]
-        target = target[mask]
+        preds, target = preds[mask], target[mask]
 
         # Calculate the indices for the flattened confusion matrix
         indices = self.n_classes * target.long() + preds.long()
@@ -51,6 +34,10 @@ class CustomMetric(tm.Metric):
 
         # Increment the appropriate bins in the histogram
         hist.scatter_add_(0, indices, torch.ones_like(indices, dtype=torch.long))
+        
+        # Move the confusion matrix to the appropriate device
+        if self.confusion_matrix.device != hist.device:
+            self.confusion_matrix = self.confusion_matrix.to(hist.device)
 
         # Increment the confusion matrix
         self.confusion_matrix += hist.reshape(self.n_classes, self.n_classes)
@@ -58,6 +45,11 @@ class CustomMetric(tm.Metric):
     def compute(self, reset=False):
         # Retrieve the confusion matrix tensor
         hist_tensor = self.confusion_matrix
+
+        mask = torch.tensor([i not in self.exclude_classes for i in range(hist_tensor.size(0))])
+
+        # Apply the mask to the confusion matrix
+        hist_tensor = hist_tensor[mask][:, mask]
 
         # Calculate overall accuracy
         acc = torch.diag(hist_tensor).sum() / hist_tensor.sum()
@@ -104,3 +96,26 @@ class CustomMetric(tm.Metric):
     def reset(self):
         # Reset the confusion matrix
         self.confusion_matrix.zero_()
+
+def polygons_to_tensor(polygons_val, types_val, room_polygons_val, room_types_val, size, split=[12, 11]):
+    ten = np.zeros((sum(split), size[0], size[1]))
+
+    for i, pol_type in enumerate(room_types_val):
+        mask = shp_mask(room_polygons_val[i], np.arange(size[1]), np.arange(size[0]))
+        ten[pol_type['class']][mask] = 1
+
+    for i, pol_type in enumerate(types_val):
+        # Index of the class
+        index = pol_type['class']
+
+        # shift the index by the number of room classes
+        if pol_type['type'] == 'icon':
+            index = pol_type['class'] + split[0]
+
+        # Draw the polygon
+        jj, ii = draw.polygon(polygons_val[i][:, 1], polygons_val[i][:, 0])
+
+        # Draw the polygon if it does not go out of bounds of the tensor, else draw the polygon with the bounds
+        ten[index][jj-1, ii-1] = 1
+
+    return ten
