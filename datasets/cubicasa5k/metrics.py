@@ -46,11 +46,6 @@ class CustomMetric(tm.Metric):
         # Retrieve the confusion matrix tensor
         hist_tensor = self.confusion_matrix
 
-        mask = torch.tensor([i not in self.exclude_classes for i in range(hist_tensor.size(0))])
-
-        # Apply the mask to the confusion matrix
-        hist_tensor = hist_tensor[mask][:, mask]
-
         # Calculate overall accuracy
         acc = torch.diag(hist_tensor).sum() / hist_tensor.sum()
 

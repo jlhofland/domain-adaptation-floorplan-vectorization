@@ -367,6 +367,46 @@ class Runner(pl.LightningModule):
     ##    LOGGING functions     ##
     ##                          ##
     ##############################
+    # def _log_scores(self, score, class_score, stage, group, pol_score=None, pol_class_score=None):
+    #     # Label group
+    #     label_group = group + "_eval"
+
+    #     # Log scores for each metric
+    #     for metric, value in score.items():
+    #         self.log(f"{stage}/{group}/{metric}", value)
+
+    #     # Log scores for each class
+    #     for metric, cls_dict in class_score.items():
+    #         for cls, value in cls_dict.items():
+    #             self.log(f"{stage}/{group}/{metric}/{cls} {self.labels[label_group][int(cls)]}", value)
+
+    #     # Log polygon scores
+    #     if pol_score is not None:
+    #         data_score, data_class = [eval(self.cfg.test.experiment_measure)], []
+    #         cols_score, cols_class = [self.cfg.test.experiment_variable], []
+
+    #         # Ensure pol_score and pol_class_score have matching keys with score and class_score
+    #         for metric, value in score.items():
+    #             if metric in pol_score:
+    #                 data_score.extend([value, pol_score[metric]])
+    #                 cols_score.extend([f"{metric} (seg)", f"{metric} (vec)"])
+    #             else:
+    #                 raise KeyError(f"Polygon score for metric '{metric}' is missing.")
+
+    #         for metric, cls_dict in class_score.items():
+    #             data, cols = [eval(self.cfg.test.experiment_measure), metric], [self.cfg.test.experiment_variable, "metric"]
+    #             for cls, value in cls_dict.items():
+    #                 name_metric = self.labels[label_group][int(cls)]
+    #                 data.extend([value, pol_class_score[metric].get(cls, None)])
+    #                 cols.extend([f"{name_metric} (seg)", f"{name_metric} (vec)"])
+    #             data_class.append(data)
+    #             cols_class = cols
+
+    #         # Log tables
+    #         self.logger.experiment.log({
+    #             f"{stage}/{group}/table/scores_classes": wandb.Table(data=[data_score], columns=cols_score),
+    #             f"{stage}/{group}/table/scores": wandb.Table(data=data_class, columns=cols_class)
+    #         })
     def _log_scores(self, score, class_score, stage, group, pol_score=None, pol_class_score=None):
         # Label group
         label_group = group + "_eval"
@@ -382,30 +422,42 @@ class Runner(pl.LightningModule):
 
         # Log polygon scores
         if pol_score is not None:
-            data_score, data_class = [eval(self.cfg.test.experiment_measure)], []
-            cols_score, cols_class = [self.cfg.test.experiment_variable], []
+            data_score_seg, data_score_vec = [eval(self.cfg.test.experiment_measure)], [eval(self.cfg.test.experiment_measure)]
+            cols_score_seg, cols_score_vec = [self.cfg.test.experiment_variable], [self.cfg.test.experiment_variable]
+
+            data_class_seg, data_class_vec = [], []
+            cols_class_seg, cols_class_vec = [], []
 
             # Ensure pol_score and pol_class_score have matching keys with score and class_score
             for metric, value in score.items():
                 if metric in pol_score:
-                    data_score.extend([value, pol_score[metric]])
-                    cols_score.extend([f"{metric} (seg)", f"{metric} (vec)"])
+                    data_score_seg.extend([value])
+                    data_score_vec.extend([pol_score[metric]])
+                    cols_score_seg.extend([f"{metric}"])
+                    cols_score_vec.extend([f"{metric}"])
                 else:
                     raise KeyError(f"Polygon score for metric '{metric}' is missing.")
 
             for metric, cls_dict in class_score.items():
-                data, cols = [eval(self.cfg.test.experiment_measure), metric], [self.cfg.test.experiment_variable, "metric"]
+                data_seg, data_vec = [eval(self.cfg.test.experiment_measure), metric], [eval(self.cfg.test.experiment_measure), metric]
+                cols_seg, cols_vec = [self.cfg.test.experiment_variable, "metric"], [self.cfg.test.experiment_variable, "metric"]
                 for cls, value in cls_dict.items():
                     name_metric = self.labels[label_group][int(cls)]
-                    data.extend([value, pol_class_score[metric].get(cls, None)])
-                    cols.extend([f"{name_metric} (seg)", f"{name_metric} (vec)"])
-                data_class.append(data)
-                cols_class = cols
+                    data_seg.extend([value])
+                    data_vec.extend([pol_class_score[metric].get(cls, None)])
+                    cols_seg.extend([f"{name_metric}"])
+                    cols_vec.extend([f"{name_metric}"])
+                data_class_seg.append(data_seg)
+                data_class_vec.append(data_vec)
+                cols_class_seg = cols_seg
+                cols_class_vec = cols_vec
 
             # Log tables
             self.logger.experiment.log({
-                f"{stage}/{group}/table/scores_classes": wandb.Table(data=[data_score], columns=cols_score),
-                f"{stage}/{group}/table/scores": wandb.Table(data=data_class, columns=cols_class)
+                f"{stage}/{group}/table/classes_seg": wandb.Table(data=data_class_seg, columns=cols_class_seg),
+                f"{stage}/{group}/table/classes_vec": wandb.Table(data=data_class_vec, columns=cols_class_vec),
+                f"{stage}/{group}/table/scores_seg": wandb.Table(data=[data_score_seg], columns=cols_score_seg),
+                f"{stage}/{group}/table/scores_vec": wandb.Table(data=[data_score_vec], columns=cols_score_vec)
             })
 
 

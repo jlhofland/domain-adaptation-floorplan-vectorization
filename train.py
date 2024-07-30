@@ -90,6 +90,9 @@ def main():
     if cfg.test.exclude_classes.enable:
         labels["room_eval"] = [label for i, label in enumerate(labels["room"]) if i not in cfg.test.exclude_classes.rooms]
         labels["icon_eval"] = [label for i, label in enumerate(labels["icon"]) if i not in cfg.test.exclude_classes.icons]
+    else:
+        labels["room_eval"] = labels["room"]
+        labels["icon_eval"] = labels["icon"]
 
     # Create loss function
     loss_fn = loss_factory.factory(cfg)

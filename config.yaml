@@ -44,7 +44,7 @@ train:
     hours: 0
     minutes: 0
   debug:
-    enable: False
+    enable: True
     print: False
     train_batches: 25 # number | False
     val_batches: 25 # number | False
@@ -56,7 +56,7 @@ test:
   experiment_variable: Lambda (C)
   experiment_measure: self.cfg.mmd.lambda_constant
   exclude_classes:
-    enable: True
+    enable: False
     rooms: [10] # [10: Garage]
     icons: [8, 9, 10] # [8: Fire Place, 9: Bathtub, 10: Chimney]
 dataset:
