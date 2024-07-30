@@ -5,7 +5,7 @@ wandb:
   experiment_name: NAME
   entity: hofland-jeroen
   project: cc5k
-  weights: model-egtpv2r8 # ID for reference hofland-jeroen/cc5k/{weights}:best
+  weights: False # ID for reference hofland-jeroen/cc5k/{weights}:best
 debugger:
   batches: False # number | False
   profiler: AdvancedProfiler # SimpleProfiler | AdvancedProfiler | False
@@ -27,7 +27,7 @@ optimizer:
   betas: [0.9, 0.999]
   patience: 10
 mmd:
-  enable: True
+  enable: False
   latent_channels: 256 # 512 | 
   latent_transformation: nn.AdaptiveMaxPool2d((4, 4)) # nn.AdaptiveMaxPool2d((1, 1)) | nn.AdaptiveMaxPool2d((2, 2)) 
   lambda_constant: 0.1
@@ -37,7 +37,7 @@ train:
   batch_size: 8
   accumulate_grad_batches: 1 # effective batch size = accumulate_grad_batches * batch_size
   resume: False # path | False 
-  max_epochs: 1
+  max_epochs: 3
   max_time:
     enable: False
     days: 0
@@ -76,8 +76,8 @@ dataset:
   val_size: False
   files:
     root: C:\Users\j.a.hofland\Documents\thesis-coding\pytorch-lightning-example\data\
-    train: train_hqa_hq.txt
-    val: val_hqa_hq.txt
+    train: train_hqa_hq_c.txt
+    val: val_hqa_hq_c.txt
     mmd:
       train: train_c.txt
       val: val_c.txt

@@ -47,6 +47,14 @@ class Runner(pl.LightningModule):
         self.test_score_pol_rooms = CustomMetric(cfg.model.input_slice[1], exclude_classes=cfg.test.exclude_classes.rooms)
         self.test_score_pol_icons = CustomMetric(cfg.model.input_slice[2], exclude_classes=cfg.test.exclude_classes.icons)
 
+        # Create tables for samples
+        self.sample_tables = {
+            "val": wandb.Table(columns=["Sample ID", "Batch Index", "Room label", "Room segmentation", 
+                                          "Icon label", "Icon segmentation", "Junction heatmaps"]),
+            "test": wandb.Table(columns=["Sample ID", "Batch Index", "Room label", "Room segmentation", "Room vectorization", 
+                                                "Icon label", "Icon segmentation", "Icon vectorization", "Junction heatmaps"])
+        }
+
     def forward(self, x, return_latent=False, return_output=True):
         # Runner needs to redirect any model.forward() calls to the actual network
         y_hat, y_latent = self.model(x, return_latent, return_output)
@@ -279,7 +287,7 @@ class Runner(pl.LightningModule):
 
         # For lenth of batch, log sample
         if batch_idx < 3:
-            self._log_sample(*heats, *rooms, *icons, batch, 0, batch_idx, "val/samples", losses)
+            self._log_sample(*heats, *rooms, *icons, batch, 0, batch_idx, "val", losses)
 
         # Get losses and weights
         self.losses["val"].append(losses)
@@ -304,7 +312,7 @@ class Runner(pl.LightningModule):
 
         # For all images in the batch, log sample
         for i in range(batch['image'].shape[0]):
-            self._log_sample(*heats, *rooms, *icons, batch, i, batch_idx, "test/samples", losses, *pol_rooms, *pol_icons)
+            self._log_sample(*heats, *rooms, *icons, batch, i, batch_idx, "test", losses, *pol_rooms, *pol_icons)
 
         # Clear memory
         torch.cuda.empty_cache()
@@ -340,6 +348,13 @@ class Runner(pl.LightningModule):
         self._log_scores(*rooms, stage, "room")
         self._log_scores(*icons, stage, "icon")
 
+        # Log sample table to wandb
+        self.logger.experiment.log({f"{stage}/samples/table": self.sample_tables[stage]})
+
+        # Reset sample tables
+        self.sample_tables[stage] = wandb.Table(columns=["Sample ID", "Batch Index", "Room label", "Room segmentation", 
+                                                         "Icon label", "Icon segmentation", "Junction heatmaps"])
+        
         # Reset validation loss, and clear GPU memory
         torch.cuda.empty_cache()
 
@@ -358,6 +373,13 @@ class Runner(pl.LightningModule):
         # Log loss and scores
         self._log_scores(*rooms, stage, "room", *pol_rooms)
         self._log_scores(*icons, stage, "icon", *pol_icons)
+        
+        # Log sample table to wandb
+        self.logger.experiment.log({f"{stage}/samples/table": self.sample_tables[stage]})
+
+        # Reset sample tables
+        self.sample_tables[stage] = wandb.Table(columns=["Sample ID", "Batch Index", "Room label", "Room segmentation", "Room vectorization", 
+                                                        "Icon label", "Icon segmentation", "Icon vectorization", "Junction heatmaps"])
 
         # Reset test loss, and clear GPU memory
         torch.cuda.empty_cache()
@@ -460,8 +482,6 @@ class Runner(pl.LightningModule):
                 f"{stage}/{group}/table/scores_vec": wandb.Table(data=[data_score_vec], columns=cols_score_vec)
             })
 
-
-
     def _log_loss(self, stage):
         # Stack losses and calculate average
         ccd_losses = torch.stack(self.losses[stage], dim=0)
@@ -492,35 +512,81 @@ class Runner(pl.LightningModule):
         self.source_latents = []
         self.target_latents = []
 
+    # def _log_sample(self, heats_pred, heats_label, rooms_pred, rooms_label, icon_pred, icon_label, batch, id, batch_idx, 
+    #                 stage, losses, pol_rooms_pred=None, pol_rooms_label=None, pol_icons_pred=None, pol_icons_label=None):
+    
+    #     # Create class labels
+    #     class_heats = {index: value for index, value in enumerate(self.labels["heat"])}
+    #     class_rooms = {index: value for index, value in enumerate(self.labels["room"])}
+    #     class_icons = {index: value for index, value in enumerate(self.labels["icon"])}
+
+    #     mask_dict = {
+    #             "room_predictions": {
+    #                 "mask_data": rooms_pred[id].cpu().detach().numpy(),
+    #                 "class_labels": class_rooms
+    #             },
+    #             "icon_predictions": {
+    #                 "mask_data": icon_pred[id].cpu().detach().numpy(),
+    #                 "class_labels": class_icons
+    #             },
+    #             "heat_predictions": {
+    #                 "mask_data": heats_pred[id].cpu().detach().numpy(),
+    #                 "class_labels": class_heats
+    #             },
+    #             "room_label": {
+    #                 "mask_data": rooms_label[id].cpu().detach().numpy(),
+    #                 "class_labels": class_rooms
+    #             },
+    #             "icon_label": {
+    #                 "mask_data": icon_label[id].cpu().detach().numpy(),
+    #                 "class_labels": class_icons
+    #             }
+    #     }
+
+    #     if pol_rooms_pred is not None:
+    #         mask_dict["pol_room_predictions"] = {
+    #             "mask_data": pol_rooms_pred[id].cpu().detach().numpy(),
+    #             "class_labels": class_rooms
+    #         }
+    #         mask_dict["pol_icon_predictions"] = {
+    #             "mask_data": pol_icons_pred[id].cpu().detach().numpy(),
+    #             "class_labels": class_icons
+    #         }
+
+    #     image = wandb.Image(batch['image'][id], caption=f"L: {losses[1]:.2f},  R: {losses[3]:.2f}, I: {losses[6]:.2f}, H: {losses[9]:.2f}", masks=mask_dict)
+
+    #     # Log room segmentation
+    #     self.logger.experiment.log({f"{stage}/sample {id}-{batch_idx}": image})
+
     def _log_sample(self, heats_pred, heats_label, rooms_pred, rooms_label, icon_pred, icon_label, batch, id, batch_idx, 
                     stage, losses, pol_rooms_pred=None, pol_rooms_label=None, pol_icons_pred=None, pol_icons_label=None):
-    
+        
         # Create class labels
         class_heats = {index: value for index, value in enumerate(self.labels["heat"])}
         class_rooms = {index: value for index, value in enumerate(self.labels["room"])}
         class_icons = {index: value for index, value in enumerate(self.labels["icon"])}
 
         mask_dict = {
-                "room_predictions": {
-                    "mask_data": rooms_pred[id].cpu().detach().numpy(),
-                    "class_labels": class_rooms
-                },
-                "icon_predictions": {
-                    "mask_data": icon_pred[id].cpu().detach().numpy(),
-                    "class_labels": class_icons
-                },
-                "heat_predictions": {
-                    "mask_data": heats_pred[id].cpu().detach().numpy(),
-                    "class_labels": class_heats
-                },
-                "room_label": {
-                    "mask_data": rooms_label[id].cpu().detach().numpy(),
-                    "class_labels": class_rooms
-                },
-                "icon_label": {
-                    "mask_data": icon_label[id].cpu().detach().numpy(),
-                    "class_labels": class_icons
-                }
+            "room_predictions": {
+                "mask_data": rooms_pred[id].cpu().detach().numpy(),
+                "class_labels": class_rooms
+            },
+            "icon_predictions": {
+                "mask_data": icon_pred[id].cpu().detach().numpy(),
+                "class_labels": class_icons
+            },
+            "heat_predictions": {
+                "mask_data": heats_pred[id].cpu().detach().numpy(),
+                "class_labels": class_heats
+            },
+            "room_label": {
+                "mask_data": rooms_label[id].cpu().detach().numpy(),
+                "class_labels": class_rooms
+            },
+            "icon_label": {
+                "mask_data": icon_label[id].cpu().detach().numpy(),
+                "class_labels": class_icons
+            }
         }
 
         if pol_rooms_pred is not None:
@@ -533,10 +599,34 @@ class Runner(pl.LightningModule):
                 "class_labels": class_icons
             }
 
-        image = wandb.Image(batch['image'][id], caption=f"L: {losses[1]:.2f},  R: {losses[3]:.2f}, I: {losses[6]:.2f}, H: {losses[9]:.2f}", masks=mask_dict)
+        # Create wandb.Image objects for each mask
+        images = {
+            "room_predictions": wandb.Image(batch['image'][id], masks={"predictions": mask_dict["room_predictions"]}),
+            "icon_predictions": wandb.Image(batch['image'][id], masks={"predictions": mask_dict["icon_predictions"]}),
+            "heat_predictions": wandb.Image(batch['image'][id], masks={"predictions": mask_dict["heat_predictions"]}),
+            "room_label": wandb.Image(batch['image'][id], masks={"labels": mask_dict["room_label"]}),
+            "icon_label": wandb.Image(batch['image'][id], masks={"labels": mask_dict["icon_label"]}),
+        }
 
-        # Log room segmentation
-        self.logger.experiment.log({f"{stage}/sample {id}-{batch_idx}": image})
+        if pol_rooms_pred is not None:
+            images["pol_room_predictions"] = wandb.Image(batch['image'][id], masks={"predictions": mask_dict["pol_room_predictions"]})
+            images["pol_icon_predictions"] = wandb.Image(batch['image'][id], masks={"predictions": mask_dict["pol_icon_predictions"]})
+
+        table_data = [id, batch_idx, images["room_label"], images["room_predictions"]]
+
+        if pol_rooms_pred is not None:
+            table_data.append(images["pol_room_predictions"])
+
+        table_data.extend([images["icon_label"], images["icon_predictions"]])
+
+        if pol_icons_pred is not None:
+            table_data.append(images["pol_icon_predictions"])
+
+        table_data.append(images["heat_predictions"])
+
+        # Add to stages sample table
+        self.sample_tables[stage].add_data(*table_data)
+
 
     def calculate_lambda(self):
         return (2 / (1 + math.exp(-self.cfg.mmd.lambda_variable * (self.current_epoch / self.cfg.train.max_epochs))) - 1)
