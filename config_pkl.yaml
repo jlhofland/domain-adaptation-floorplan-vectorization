@@ -1,0 +1,17 @@
+dataset:
+  files:
+    root: /Users/jeroenhofland/Documents/Thesis/ood-floorplan-vectorization/data/
+  grayscale: False  # Set to True if images should be loaded in grayscale
+  load_samples: True # Set to True if you want to load pre-saved samples
+  save_samples: False  # Set to True if you want to save samples as pickle files
+  original_size: True  # Set to True if you want to resize labels to original size
+  num_workers: 4  # Number of workers for multiprocessing
+model:
+  name: CubiCasa
+  init_weights: False
+  input_slice: [21, 12, 11]
+mmd:
+  latent_channels: False
+  latent_transformation: False
+test:
+  heatmap_threshold: 0.4

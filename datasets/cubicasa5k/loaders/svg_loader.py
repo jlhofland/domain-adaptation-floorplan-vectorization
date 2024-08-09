@@ -1,4 +1,3 @@
-import lmdb
 import pickle
 import torch
 from torch.utils.data import Dataset
@@ -37,7 +36,7 @@ class FloorplanSVG(Dataset):
 
         # Save label and heatmaps in folder of the image
         if cfg.dataset.save_samples and pre_load:
-            self.samples_to_pickle_dist() 
+            self.samples_to_pickle() # Adjust if your computer cannot do multiprocessing (macOS)
 
     def __len__(self):
         """__len__"""
