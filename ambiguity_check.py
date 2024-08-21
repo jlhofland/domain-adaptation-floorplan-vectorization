@@ -40,7 +40,7 @@ if __name__ == "__main__":
                 "file": "train_c.txt",
                 "ignore": []
             },
-            "Validation": {
+            "Val": {
                 "file": "val_c.txt",
                 "ignore": [43]
             },
@@ -54,7 +54,7 @@ if __name__ == "__main__":
                 "file": "train_hq.txt",
                 "ignore": [0, 12, 14, 65, 154, 322, 356, 571, 576, 654, 717, 807]
             },
-            "Validation": {
+            "Val": {
                 "file": "val_hq.txt",
                 "ignore": []
             },
@@ -68,7 +68,7 @@ if __name__ == "__main__":
                 "file": "train_hqa.txt",
                 "ignore": [207, 334, 1053, 1060, 1263, 1457, 1562, 1660, 1768, 1812, 1906, 1920, 1921, 1922, 1923, 1948, 2386, 2501, 2505, 2702, 2759]
             },
-            "Validation": {
+            "Val": {
                 "file": "val_hqa.txt",
                 "ignore": [60]
             },
@@ -285,7 +285,7 @@ if __name__ == "__main__":
                 if key == "total_len": continue
                 per_div = len(values)/data["total_len"]
                 avg_div = np.mean([v["div"] for v in values]) if len(values) > 0 else 0
-                experiments[key].at[domain, split] = f"{per_div:0.2f} ({avg_div:0.2f})"
+                experiments[key].at[domain, split] = f"{per_div*100:0.1f}" # ({avg_div*100:0.1f})
 
     # Concatenate the tables
     experiments = pd.concat(experiments, axis=1)

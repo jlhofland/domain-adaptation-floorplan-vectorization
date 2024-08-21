@@ -7,13 +7,13 @@ import numpy as np
 
 experiment  = ""
 data_folder = 'paper/results'
-save_folder = 'paper/plots'
+save_folder = 'paper/extra'
 os.makedirs(save_folder, exist_ok=True)
 
 experiments = {
-    "LC": "Constant λ",
-    "LF": "Finegrained λ",
-    "LV": "Variable λ",
+    "LC": ["Constant λ", "$\lambda$"],
+    "LF": ["Finegrained λ", "$\lambda$"],
+    "LV": ["Variable λ", "$\lambda$"],
 }
 col_id_exps = 0 # First column is the experiment name and values are variations of the experiment
 metric      = "Class IoU"
@@ -45,7 +45,7 @@ class_structure = {
 }
 
 ### PLOT ###
-fig, ax = plt.subplots(1, len(experiments), figsize=(len(experiments)*8+4, 8))
+fig, ax = plt.subplots(1, len(experiments), figsize=(len(experiments)*8+4, 8), sharey=True)
 
 for e, (exp, exp_name) in enumerate(experiments.items()):
     # Loop through the class structure
@@ -76,15 +76,18 @@ for e, (exp, exp_name) in enumerate(experiments.items()):
             df["Mean"] = df.iloc[:, 1:].mean(axis=1)
 
             if data_type != "Difference":
-                ax[e].plot(df.iloc[:, 0], df["Mean"], marker='o', label=f"{class_type} {data_type}", color=class_data["colors"], linestyle='--' if data_type == "Vectorization" else '-', markersize=10)
+                ax[e].plot(df.iloc[:, 0], df["Mean"]*100, marker='o', label=f"{class_type} {data_type}", color=class_data["colors"], linestyle='--' if data_type == "Vectorization" else '-', markersize=10)
 
                 # Plot the max value
                 max_row = df[df["Mean"] == df["Mean"].max()]
-                ax[e].scatter(max_row.iloc[:, 0], max_row["Mean"], color="tab:green", s=100, zorder=10, label="Max")
+                ax[e].scatter(max_row.iloc[:, 0], max_row["Mean"]*100, color="tab:green", s=100, zorder=10, label="Max")
+
+            # Change first column name to exp_name[1]
+            df = df.rename(columns={df.columns[0]: exp_name[1]})
 
             # Add \textbf{} around the max value in a column (except first column) and put in 3 decimal places
             for column in df.columns[1:]:
-                df[column] = df[column].apply(lambda x: f"\textbf{{{x:.3f}}}" if x == df[column].max() else f"{x:.3f}")
+                df[column] = df[column].apply(lambda x: f"\textbf{{{x*100:.1f}}}" if x == df[column].max() else f"{x*100:.1f}")
 
             # Make sure directory exists
             os.makedirs(f'{save_folder}/{exp}', exist_ok=True)
@@ -99,9 +102,9 @@ for e, (exp, exp_name) in enumerate(experiments.items()):
     ax[e].tick_params(axis='both', which='major', labelsize=fontsize)
 
     # Set the title
-    ax[e].set_title(exp_name, fontsize=fontsize)
+    ax[e].set_title(exp_name[0], fontsize=fontsize)
 
-ax[0].set_ylabel(metric, fontsize=fontsize)
+ax[0].set_ylabel("IoU (%)", fontsize=fontsize)
 
 # Get the labels and handles for the last
 handles, labels = ax[-1].get_legend_handles_labels()

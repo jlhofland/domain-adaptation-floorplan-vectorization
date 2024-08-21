@@ -73,7 +73,7 @@ def calculate_average_kl(vector_list):
     return np.mean(kl_list)
 
 ### PLOT ###
-fig, ax = plt.subplots(len(structure), len(structure["Colored"]), figsize=(len(structure["Colored"])*8, len(structure)*8))
+fig, ax = plt.subplots(len(structure), len(structure["Colored"]), figsize=(len(structure["Colored"])*8, len(structure)*4), sharex='col', sharey='row', gridspec_kw = {'wspace':0, 'hspace':0})
 
 domain_dict = {}
 for i, (domain, domain_data) in enumerate(structure.items()):
@@ -99,12 +99,15 @@ for i, (domain, domain_data) in enumerate(structure.items()):
         # Get the number of samples
         n_samples = len(pixels["Red"])
 
+        # Add grid
+        ax[i, j].grid(True, alpha=0.5)
+
         # For each channel convert to numpy array
         for k, channel in enumerate(["Red", "Green", "Blue"]):
-            pixels[channel] = np.histogram(np.concatenate(pixels[channel]), bins=int(256/2), range=(0, 256), density=True)
+            pixels[channel] = np.histogram(np.concatenate(pixels[channel]), bins=int(256), range=(0, 256), density=True)
 
             # Plot a line plot
-            ax[i, j].plot(pixels[channel][1][:-1], pixels[channel][0], label=channel, color=channel, alpha=0.7, linestyle=style[channel])
+            ax[i, j].plot(pixels[channel][1][:-1], pixels[channel][0]*100, label=channel, color=channel, alpha=0.7, linestyle=style[channel])
 
         # Calculate KL divergence
         kl = calculate_average_kl([pixels["Red"][0], pixels["Green"][0], pixels["Blue"][0]])
@@ -116,7 +119,10 @@ for i, (domain, domain_data) in enumerate(structure.items()):
         ax[i, j].set_yscale('log')
 
         # Show y-axis from 10-5 to 10-2
-        ax[i, j].set_ylim(10**-4, 10**-1)
+        # ax[i, j].set_ylim(100*10**-4, 100*10**-1)
+
+        # Set ylabels to normal percentage format
+        ax[i, j].yaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: f'{x:.1f}'))
     
         # Set tick to fontsize
         ax[i, j].tick_params(axis='both', which='major', labelsize=fontsize)
@@ -132,12 +138,15 @@ for i, (domain, domain_data) in enumerate(structure.items()):
         kl += calculate_average_kl([data_dict["Train"][color][0], data_dict["Validation"][color][0], data_dict["Test"][color][0]])
 
     # Add axis titles/labels + kl divergence
-    ax[i, 0].set_ylabel("Density", fontsize=fontsize)
-    ax[i, -1].set_ylabel(f"{domain}\nKL: {kl:.2f}", fontsize=fontsize)
+    ax[i, -1].set_ylabel(f"{domain}\nKL: {kl/3:.2f}", fontsize=fontsize)
     ax[i, -1].yaxis.set_label_position("right")
 
     # Add in dict
     domain_dict[domain] = data_dict
+
+# Set ylabel of figure
+ax[1, 0].set_ylabel("Density (%)", fontsize=fontsize)
+ax[-1, 1].set_xlabel("Pixel Intensity", fontsize=fontsize)
 
 # Handle special rows
 for j, (data_type, data_file) in enumerate(domain_data.items()):
@@ -147,10 +156,28 @@ for j, (data_type, data_file) in enumerate(domain_data.items()):
         kl += calculate_average_kl([domain_dict["High Quality Architectural"][data_type][color][0], domain_dict["High Quality"][data_type][color][0], domain_dict["Colored"][data_type][color][0]])
     
     # Set first row title to data type
-    ax[0, j].set_title(f"{data_type}\nKL: {kl:.2f}", fontsize=fontsize)
+    ax[0, j].set_title(f"{data_type}\nKL: {kl/3:.2f}", fontsize=fontsize)
 
-    # Set last row labels to intensity
-    ax[-1, j].set_xlabel("Intensity", fontsize=fontsize)
+# Create a 3x3 dataframe (3 domains, 3 domains) and calculate the KL divergence between the domains (asymmetric)
+kl_df = pd.DataFrame(index=structure.keys(), columns=structure.keys())
+for i, (domain1, domain1_data) in enumerate(domain_dict.items()):
+    for j, (domain2, domain2_data) in enumerate(domain_dict.items()):
+        kl = []
+        for color in ["Red", "Green", "Blue"]:
+            domain1_app = domain1_data["Train"][color][0] + domain1_data["Validation"][color][0] + domain1_data["Test"][color][0],
+            domain2_app = domain2_data["Train"][color][0] + domain2_data["Validation"][color][0] + domain2_data["Test"][color][0]
+
+            # Normalize the data
+            domain1_app = domain1_app / np.sum(domain1_app)
+            domain2_app = domain2_app / np.sum(domain2_app)
+
+            kl.append(kl_divergence(domain1_app, domain2_app))
+        kl_df.loc[domain1, domain2] = f'{np.mean(kl):.2f}'
+
+        print(f"KL divergence from {domain1} to {domain2}: {np.mean(kl):.2f}")
+
+# Save the dataframe to a latex table
+kl_df.to_latex(f'{save_folder}/pixel_distribution_per_domain_split.tex', escape=False)
 
 # Save the plot
 plt.tight_layout()

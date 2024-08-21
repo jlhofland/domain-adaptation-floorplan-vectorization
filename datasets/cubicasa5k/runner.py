@@ -75,7 +75,7 @@ class Runner(pl.LightningModule):
         optimizer = optim.Adam(params, eps=self.cfg.optimizer.eps, betas=self.cfg.optimizer.betas)
 
         # Create learning rate scheduler
-        scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=self.cfg.optimizer.patience)
+        scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=self.cfg.optimizer.factor, patience=self.cfg.optimizer.patience)
 
         # Return optimizer and scheduler that monitor the loss for every 1 step
         return {

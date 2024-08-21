@@ -28,7 +28,7 @@ class_structure = {
         },
         "ignore": ["Garage"],
         "labels": ["Background", "Outdoor", "Wall", "Kitchen", "Living Room" ,"Bed Room", "Bath", "Entry", "Railing", "Storage", "Garage", "Undefined"],
-        "colors": ["tab:blue", "tab:orange"]
+        "colors": ["tab:cyan", "tab:red"]
     },
     "Icons": {
         "data": {
@@ -38,21 +38,28 @@ class_structure = {
         },
         "ignore": ["Fire Place", "Bathtub", "Chimney"],
         "labels": ["No Icon", "Window", "Door", "Closet", "Electrical Applience" ,"Toilet", "Sink", "Sauna Bench", "Fire Place", "Bathtub", "Chimney"],
-        "colors": ["tab:blue", "tab:orange"]
+        "colors": ["tab:cyan", "tab:red"]
     }
 }
 
 experiments = {
-    "MP01": ["256", "512"],
-    "MP001": ["256", "512"],
+    "MP001": {
+        "Channels": ["256", "512"],
+        "Name": "λ = 0.01"
+    },
+    "MP01": {
+        "Channels": ["256", "512"],
+        "Name": "λ = 0.1"
+    },
 }
 
 ### PLOT ###
 
-for i, (exp, channels) in enumerate(experiments.items()):
-    # Create a new figure of width 2 and height 1
-    fig, ax = plt.subplots(1, len(class_structure), figsize=(len(class_structure)*12+4, 12))
+fig, ax = plt.subplots(1*len(experiments), len(class_structure), figsize=(len(class_structure)*4+4, 12), sharey='row', sharex=True, gridspec_kw={'hspace': 0.0, 'wspace': 0.0})
 
+for i, (exp, exp_data) in enumerate(experiments.items()):
+    channels = exp_data["Channels"]
+    plot_shift = i*len(class_structure)
     # Iterate over the class structure
     for j, (class_name, class_data) in enumerate(class_structure.items()):
         for l, (data_type, data_file) in enumerate(class_data["data"].items()):
@@ -101,14 +108,14 @@ for i, (exp, channels) in enumerate(experiments.items()):
 
                 if data_type != "Difference":
                     # Plot a horizontal line at the Mean of the NaN row with marker x and color gray
-                    ax[j].axhline(y=nan_row["Mean"].values[0], color='gray', linestyle='dotted', zorder=9, label='No adaptation') 
+                    ax[j][i].axhline(y=nan_row["Mean"].values[0]*100, color='gray', linestyle='dotted', zorder=9, label='No adaptation') 
                     
                     # Plot the data
-                    ax[j].plot(df.iloc[:, 0], df["Mean"], label=f'{channel} {data_type}', color=class_data["colors"][k], linestyle='-' if data_type == "Segmentation" else '--', marker='o', markersize=10)
+                    ax[j][i].plot(df.iloc[:, 0], df["Mean"]*100, label=f'{channel} {data_type}', color=class_data["colors"][k], linestyle='-' if data_type == "Segmentation" else '--', marker='o', markersize=10)
 
                     # Plot the max value
                     max_row = df[df["Mean"] == df["Mean"].max()]
-                    ax[j].scatter(max_row.iloc[:, 0], max_row["Mean"], color='tab:green', zorder=10, label='Max', s=100)
+                    ax[j][i].scatter(max_row.iloc[:, 0], max_row["Mean"]*100, color='tab:green', zorder=10, label='Max', s=100)
 
                 # Add a column after first column with the channel
                 df.insert(0, "Channels", channel)
@@ -121,7 +128,7 @@ for i, (exp, channels) in enumerate(experiments.items()):
 
             # Add \textbf{} around the max value in a column (except first and second column) and put 3 dec
             for column in df_merged.columns[2:]:
-                df_merged[column] = df_merged[column].apply(lambda x: f"\textbf{{{x:.3f}}}" if x == df_merged[column].max() else f"{x:.3f}")
+                df_merged[column] = df_merged[column].apply(lambda x: f"\textbf{{{x*100:.1f}}}" if x == df_merged[column].max() else f"{x*100:.1f}")
 
             # Make sure directory exists
             os.makedirs(f'{save_folder}/{exp}', exist_ok=True)
@@ -129,28 +136,37 @@ for i, (exp, channels) in enumerate(experiments.items()):
             # Save the dataframe to a latex table and group by first column 
             df_merged.to_latex(f'{save_folder}/{exp}/{class_name}_{data_type}.tex', index=False, escape=False, multirow=True)
 
-        # Set the labels
-        ax[j].set_title(class_name, fontsize=fontsize)
-        ax[j].set_xlabel(df.columns[col_id_exps+1], fontsize=fontsize)
-        ax[j].set_ylabel(metric, fontsize=fontsize)
-        ax[j].set_xticks(df.iloc[:, col_id_exps+1])
-
         # Set ticks to fontsize
-        ax[j].tick_params(axis='both', which='major', labelsize=fontsize)
+        ax[j][i].tick_params(axis='both', which='major', labelsize=fontsize)
 
-    # Get the labels and handles for the last
-    handles, labels = ax[-1].get_legend_handles_labels()
-    unique = [(h, l) for i, (h, l) in enumerate(zip(handles, labels)) if l not in labels[:i]]
+# Set the titles of the first row to the experiment names
+for i, (exp, exp_data) in enumerate(experiments.items()):
+    ax[0][i].set_title(exp_data["Name"], fontsize=fontsize)
 
-    # Plot legend outside of the plot on the right
-    ax[-1].legend(*zip(*unique), fontsize=fontsize, loc='center left', bbox_to_anchor=(1, 0.5))
+# Set last column to rooms/icons (class_structure)
+for j, (class_name, class_data) in enumerate(class_structure.items()):
+    ax[j][-1].set_ylabel(class_name, fontsize=fontsize)
+    ax[j][-1].yaxis.set_label_position("right")
 
-    # Adjust the layout for the legend
-    plt.subplots_adjust(right=0.7)
+# Get the labels and handles for the last
+handles, labels = ax[-1][-1].get_legend_handles_labels()
+unique = [(h, l) for i, (h, l) in enumerate(zip(handles, labels)) if l not in labels[:i]]
 
-    # Save the figure
-    plt.tight_layout()
+# Plot legend outside of the plot on the right and for y placement between the rows
+fig.legend(*zip(*unique), fontsize=fontsize, loc='center left', bbox_to_anchor=(1, 0.5))
 
-    # Make sure directory exists
-    plt.savefig(f'{save_folder}/{exp}_comparison.pdf', bbox_inches='tight')
+# Add ylabel (Intersection over Union (IoU)) on the left side with vertical centering
+fig.text(0.00, 0.5, "IoU (%)", va='center', rotation='vertical', fontsize=fontsize)
+
+# Add xlabel (Experiment) on the bottom with horizontal centering
+fig.text(0.5, 0.00, "Adaptive Pooling Size (HxW)", ha='center', fontsize=fontsize)
+
+# Adjust the layout for the legend
+plt.subplots_adjust(right=0.5)
+
+# Save the figure
+plt.tight_layout(pad=2.0)
+
+# Make sure directory exists
+plt.savefig(f'{save_folder}/MP_comparison.pdf', bbox_inches='tight')
             

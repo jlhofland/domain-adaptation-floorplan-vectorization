@@ -29,6 +29,7 @@ labels = {
     "Icons": ["No Icon", "Window", "Door", "Closet", "Elect. Appl." ,"Toilet", "Sink", "Sauna Bench", "Fire Place", "Bathtub", "Chimney"]
 }
 fontsize = 18
+font_sm  = 12
 model_weights = "weights/model_best_val_loss_var.pkl"
 
 # Load defaults and overwrite by command-line arguments
@@ -82,6 +83,9 @@ for i, (domain, domain_txt) in enumerate(files.items()):
 
             # Img size
             batch, _, height, width = image.shape
+
+            # if count in [5, 13, 15, 16, 35]:
+            #     continue
 
             # Create rotations
             rot_class = RotateNTurns()
@@ -193,24 +197,37 @@ plots = {
     }
 }
 
+# Multiply all class scores
+for domain, domain_data in domain_scores.items():
+    for class_type, class_data in domain_data.items():
+        for data_type, data_file in class_data.items():
+            for class_name, class_scores in data_file["classes_dict"]["Class IoU"].items():
+                data_file["classes_dict"]["Class IoU"][class_name] *= 100
+            data_file["general_dict"]["Mean IoU"] *= 100
+
+# Loop over the domain scores
 for i, (domain, domain_data) in enumerate(domain_scores.items()): # High Quality Architectural, High Quality, Colored
     for j, (class_type, class_data) in enumerate(domain_data.items()): # Rooms, Icons
         for k, (data_type, data_file) in enumerate(class_data.items()): # Segmentation, Vectorization
             for l, (class_name, class_scores) in enumerate(data_file["classes_dict"]["Class IoU"].items()):
+                # Get the class scores
+                segmentation_scores = class_data["Segmentation"]["classes_dict"]["Class IoU"][class_name]
+                vectorization_scores = class_data["Vectorization"]["classes_dict"]["Class IoU"][class_name]
+
                 # Check if Segmentation or Vectorization is higher for class l
-                if class_data["Segmentation"]["classes_dict"]["Class IoU"][class_name] > class_data["Vectorization"]["classes_dict"]["Class IoU"][class_name]:
-                    text_aligning, text_pad = ["top", "bottom"], [0.02, -0.02]
+                if segmentation_scores > vectorization_scores:
+                    text_aligning, text_pad = ["center", "center"], [6, -6]
                 else:
-                    text_aligning, text_pad = ["bottom", "top"], [-0.02, 0.02]
+                    text_aligning, text_pad = ["center", "center"], [-6, 6]
 
                 plots[class_type]["ax"][l].bar(domain, class_scores, color=colors[class_type][l], alpha=0.5, edgecolor='black', linestyle='dashed' if data_type == "Vectorization" else None)
 
                 # If vectorization, set text below the top of the bar with the iou score
                 if data_type == "Vectorization" and class_scores > 0:
-                    plots[class_type]["ax"][l].text(domain, class_scores - text_pad[0], f"{class_scores:.2f}", ha='center', va=text_aligning[0], fontsize=int(fontsize/2))
-                elif data_type == "Segmentation" and class_scores > 0:
+                    plots[class_type]["ax"][l].text(domain, class_scores - text_pad[0], f"{class_scores:.1f}", ha='center', va=text_aligning[0], fontsize=font_sm)
+                elif class_scores > 0:
                     # If segmentation, set text above the top of the bar with the iou score
-                    plots[class_type]["ax"][l].text(domain, class_scores - text_pad[1], f"{class_scores:.2f}", ha='center', va=text_aligning[1], fontsize=int(fontsize/2))
+                    plots[class_type]["ax"][l].text(domain, class_scores - text_pad[1], f"{class_scores:.1f}", ha='center', va=text_aligning[1], fontsize=font_sm)
                 
                 # Set x-axis to fontsize
                 plots[class_type]["ax"][l].tick_params(axis='both', which='major', labelsize=fontsize)
@@ -219,10 +236,10 @@ for i, (domain, domain_data) in enumerate(domain_scores.items()): # High Quality
                 plots[class_type]["ax"][l].set_title(labels[class_type][l], fontsize=fontsize, pad=20)
 
                 # Set Y-axis to 0-1
-                plots[class_type]["ax"][l].set_ylim(0, 1.1)
+                plots[class_type]["ax"][l].set_ylim(0, 110)
 
                 # Set y-ticks to 0.2
-                plots[class_type]["ax"][l].set_yticks(np.arange(0, 1.1, 0.2))
+                plots[class_type]["ax"][l].set_yticks(np.arange(0, 110, 20))
 
                 # Add a border around the each bar in the plot
                 for spine in plots[class_type]["ax"][l].spines.values():
@@ -231,19 +248,19 @@ for i, (domain, domain_data) in enumerate(domain_scores.items()): # High Quality
 
             # Check if Segmentation or Vectorization is higher for class l
             if class_data["Segmentation"]["general_dict"]["Mean IoU"] > class_data["Vectorization"]["general_dict"]["Mean IoU"]:
-                text_aligning, text_pad = ["top", "bottom"], [0.02, -0.02]
+                text_aligning, text_pad = ["center", "center"], [6, -6]
             else:
-                text_aligning, text_pad = ["bottom", "top"], [-0.02, 0.02]
+                text_aligning, text_pad = ["center", "center"], [-6, 6]
 
             # If vectorization, set text below the top of the bar with the iou score
             if data_type == "Vectorization":
                 # Plot the general IoU
                 plots[class_type]["ax"][-1].bar(domain, data_file["general_dict"]["Mean IoU"], color="black", alpha=0.5, edgecolor='black', linestyle='dashed')
-                plots[class_type]["ax"][-1].text(domain, data_file["general_dict"]["Mean IoU"] - text_pad[0], f"{data_file['general_dict']['Mean IoU']:.2f}", ha='center', va=text_aligning[0], fontsize=int(fontsize/2))
+                plots[class_type]["ax"][-1].text(domain, data_file["general_dict"]["Mean IoU"] - text_pad[0], f"{data_file['general_dict']['Mean IoU']:.1f}", ha='center', va=text_aligning[0], fontsize=font_sm)
             else:
                 # If segmentation, set text above the top of the bar with the iou score
                 plots[class_type]["ax"][-1].bar(domain, data_file["general_dict"]["Mean IoU"], color="black", alpha=0.5, edgecolor='black')
-                plots[class_type]["ax"][-1].text(domain, data_file["general_dict"]["Mean IoU"] - text_pad[1], f"{data_file['general_dict']['Mean IoU']:.2f}", ha='center', va=text_aligning[1], fontsize=int(fontsize/2))
+                plots[class_type]["ax"][-1].text(domain, data_file["general_dict"]["Mean IoU"] - text_pad[1], f"{data_file['general_dict']['Mean IoU']:.1f}", ha='center', va=text_aligning[1], fontsize=font_sm)
 
             # Set x-axis to fontsize
             plots[class_type]["ax"][-1].tick_params(axis='both', which='major', labelsize=fontsize)
@@ -256,10 +273,11 @@ for i, (domain, domain_data) in enumerate(class_counts.items()):
     for j, (class_type, class_data) in enumerate(domain_data.items()):
         class_data[class_type] = sum(class_data.values())
         for k, (class_name, class_count) in enumerate(class_data.items()):
-            plots[class_type]["ax"][k].text(i, plots[class_type]["ax"][k].get_ybound()[1] + 0.01, f'{class_count}', ha='center', va='bottom', fontsize=fontsize/2)
+            plots[class_type]["ax"][k].text(i, plots[class_type]["ax"][k].get_ybound()[1] + 0.01, f'{class_count}', ha='center', va='bottom', fontsize=font_sm)
+
 # Set y-labels
-ax_rooms[0].set_ylabel("IoU", fontsize=fontsize)
-ax_icons[0].set_ylabel("IoU", fontsize=fontsize)
+ax_rooms[0].set_ylabel("IoU (%)", fontsize=fontsize)
+ax_icons[0].set_ylabel("IoU (%)", fontsize=fontsize)
 
 # Rotate the x-axis labels
 for plot in plots.values():

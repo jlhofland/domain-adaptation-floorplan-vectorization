@@ -104,7 +104,7 @@ def main():
     dataset = CubiCasa5K(cfg)
 
     # Set float32 precision for matrix multiplication (speedup on modern GPUs)
-    torch.set_float32_matmul_precision("medium")
+    torch.set_float32_matmul_precision(cfg.train.precision)
 
     # Watch model for logging, gradients, parameters, and optimizer parameters
     if cfg.model.watch:
