@@ -3,9 +3,9 @@ import random
 folder = "data"
 
 # File paths
-source_path = "val_hqa_hq.txt"
-target_path = "val_c.txt"
-baseline_path = "val_hqa_hq_c.txt"
+source_path = "val_hqa_hq.txt" # do for train_hqa_hq.txt and val_hqa_hq.txt
+target_path = "val_c.txt" # do for train_c.txt and val_c.txt
+baseline_path = "val_hqa_hq_c.txt" # do for train_hqa_hq_c.txt and val_hqa_hq_c.txt
 
 # count the number of target lines (images)
 with open(f'{folder}\{target_path}', 'r') as target:

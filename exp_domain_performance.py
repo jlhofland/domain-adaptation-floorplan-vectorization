@@ -84,9 +84,6 @@ for i, (domain, domain_txt) in enumerate(files.items()):
             # Img size
             batch, _, height, width = image.shape
 
-            # if count in [5, 13, 15, 16, 35]:
-            #     continue
-
             # Create rotations
             rot_class = RotateNTurns()
             rotations = [(0, 0), (1, -1), (2, 2), (-1, 1)]
@@ -155,12 +152,15 @@ for i, (domain, domain_txt) in enumerate(files.items()):
             class_counts[domain]["Rooms"] = {class_name: class_counts[domain]["Rooms"][class_name] + 1 if torch.sum(label[:, 0] == i).item() > 0 else class_counts[domain]["Rooms"][class_name] for i, class_name in enumerate(labels["Rooms"])}
             class_counts[domain]["Icons"] = {class_name: class_counts[domain]["Icons"][class_name] + 1 if torch.sum(label[:, 1] == i).item() > 0 else class_counts[domain]["Icons"][class_name] for i, class_name in enumerate(labels["Icons"])}
 
+    # Compute the scores
     general_rooms, classes_rooms = score_rooms.compute()
     general_icons, classes_icons = score_icons.compute()
 
+    # Compute the polygon scores
     general_room_vec, classes_room_vec = score_pol_rooms.compute()
     general_icon_vec, classes_icon_vec = score_pol_icons.compute()
 
+    # Save the scores
     domain_scores[domain] = {
         "Rooms": {
             "Segmentation": {
@@ -183,9 +183,12 @@ for i, (domain, domain_txt) in enumerate(files.items()):
             }
         }
     }
+
+# Create plots
 fig_rooms, ax_rooms = plt.subplots(1, len(labels["Rooms"])+1, figsize=(24, 3), sharey=True)
 fig_icons, ax_icons = plt.subplots(1, len(labels["Icons"])+1, figsize=(24, 3), sharey=True)
 
+# Create plots
 plots = {
     "Rooms": {
         "fig": fig_rooms,

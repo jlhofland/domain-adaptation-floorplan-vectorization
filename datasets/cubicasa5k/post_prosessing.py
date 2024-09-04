@@ -10,6 +10,9 @@ from shapely.geometry import Polygon
 from shapely.ops import unary_union
 from collections.abc import Iterable
 
+############################
+## BORROWED FROM CUBICASA ##
+############################
 
 def get_wall_polygon(wall_heatmaps, room_segmentation, threshold, wall_classes, point_orientations, orientation_ranges):
     wall_lines, wall_points, wall_point_orientation_lines_map = get_wall_lines(wall_heatmaps, room_segmentation, threshold, wall_classes, point_orientations, orientation_ranges)

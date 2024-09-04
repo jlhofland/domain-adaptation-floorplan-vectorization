@@ -10,6 +10,10 @@ from datasets.cubicasa5k.post_prosessing import get_polygons
 from datasets.cubicasa5k.loaders.augmentations import RotateNTurns
 import numpy as np
 
+#############################
+## CREATED FOR CLUSTER RUN ##
+#############################
+
 class Runner(pl.LightningModule):
     def __init__(self, cfg, model, loss_fn, labels, *args, **kwargs):
         # Initialize the LightningModule
@@ -201,10 +205,6 @@ class Runner(pl.LightningModule):
         return (seg_heats, None), (seg_rooms, labels[:, 0]), (seg_icons, labels[:, 1]), (pol_rooms, labels[:, 0]), (pol_icons, labels[:, 1]), loss
 
     def _retrieve_batch(self, y_hat, y):
-        # Assume y_hat and y have shapes:
-        # y_hat = [batch_size, channels, height, width]
-        # y = [batch_size, channels, height, width] but different channel arrangement
-
         # Split based on the configured slices
         input_slices = tuple(self.cfg.model.input_slice)
         heats_pred, rooms_pred, icons_pred = torch.split(y_hat, input_slices, dim=1) # [batch_size, channels, height, width]
@@ -627,6 +627,6 @@ class Runner(pl.LightningModule):
         # Add to stages sample table
         self.sample_tables[stage].add_data(*table_data)
 
-
+    # Calculate lambda if variable lambda is enabled
     def calculate_lambda(self):
         return (2 / (1 + math.exp(-self.cfg.mmd.lambda_variable * (self.current_epoch / self.cfg.train.max_epochs))) - 1)

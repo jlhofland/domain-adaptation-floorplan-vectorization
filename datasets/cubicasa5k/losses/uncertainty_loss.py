@@ -2,6 +2,11 @@ import torch
 from torch.nn import Parameter, Module
 from torch.nn.functional import mse_loss, cross_entropy, interpolate
 
+
+############################
+## ADJUSTED FROM CUBICASA ##
+############################
+
 class UncertaintyLoss(Module):
     def __init__(self, input_slice=[21, 13, 17],
                  target_slice=[21, 1, 1], sub=0,

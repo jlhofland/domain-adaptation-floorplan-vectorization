@@ -91,10 +91,8 @@ if __name__ == "__main__":
     cfg = OmegaConf.merge(cfg, cmd_cfg)
     print(OmegaConf.to_yaml(cfg))
 
+    # Create a dictionary to store the scores
     domain_scores = {}
-
-    if torch.backends.mps.is_available():
-        print("MPS available and enabled")
 
     # Print number of GPUS and cpu threads
     print(f"Number of GPUs: {torch.cuda.device_count()}")
@@ -112,6 +110,7 @@ if __name__ == "__main__":
     # Set model to evaluation mode
     model.eval()
 
+    # Loop over the domains
     for i, (domain, splits) in enumerate(files.items()):
         domain_scores[domain] = {}
         for j, (split, split_data) in enumerate(splits.items()):
@@ -262,6 +261,7 @@ if __name__ == "__main__":
                         ax[2].set_title("Label", fontsize=fontsize)
                         ax[3].set_title(f"Error: {u_percentage:.2f}", fontsize=fontsize)
 
+                        # Set the colorbar
                         plt.tight_layout()
                         
                         # Save the plot
@@ -279,6 +279,7 @@ if __name__ == "__main__":
         "undefined": pd.DataFrame(columns=files["Colored"].keys(), index=files.keys())
     }
 
+    # Fill the tables with the data
     for domain, splits in domain_scores.items():
         for split, data in splits.items():
             for key, values in data.items():

@@ -6,6 +6,9 @@ import torch
 from skimage import draw
 from shapely.geometry import Polygon, Point
 
+############################
+## BORROWED FROM CUBICASA ##
+############################
 
 def discrete_cmap_furukawa():
     """create a colormap with N (N<15) discrete colors and register it"""

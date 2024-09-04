@@ -6,6 +6,10 @@ from skimage import draw
 from shapely.geometry import Polygon
 from datasets.cubicasa5k.plotting import shp_mask
 
+############################
+## ADJUSTED FROM CUBICASA ##
+############################
+
 class CustomMetric(tm.Metric):
     def __init__(self, n_classes, exclude_classes=[]):
         super().__init__()

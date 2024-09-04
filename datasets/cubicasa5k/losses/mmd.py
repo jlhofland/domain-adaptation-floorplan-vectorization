@@ -1,6 +1,10 @@
 import torch
 from torch.nn import Module, Parameter
 
+############################
+## ADJUSTED FROM MMD LOSS ##
+############################
+
 class RBF(Module):
 
     def __init__(self, n_kernels=5, mul_factor=2.0, bandwidth=None):

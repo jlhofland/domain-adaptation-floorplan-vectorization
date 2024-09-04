@@ -39,7 +39,9 @@ class Compose(object):
 # 19. Icon lower left
 # 20. Icon lower right
 
-
+############################
+## BORROWED FROM CUBICASA ##
+############################
 
 class RandomRotations(object):
     def __init__(self, format='furu'):

@@ -26,6 +26,7 @@ optimizer:
   eps: 1e-08
   betas: [0.9, 0.999]
   patience: 10
+  factor: 0.5
 mmd:
   enable: False
   latent_channels: 256 # 512 | 
@@ -38,6 +39,7 @@ train:
   accumulate_grad_batches: 1 # effective batch size = accumulate_grad_batches * batch_size
   resume: False # path | False 
   max_epochs: 3
+  precision: medium # highest or medium
   max_time:
     enable: False
     days: 0

@@ -5,6 +5,9 @@ from xml.dom import minidom
 from skimage.draw import polygon
 import cv2
 
+############################
+## BORROWED FROM CUBICASA ##
+############################
 
 all_rooms = {"Background": 0,  # Not in data. The default outside label
              "Alcove": 1,

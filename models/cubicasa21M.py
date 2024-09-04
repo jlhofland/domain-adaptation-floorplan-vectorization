@@ -40,10 +40,12 @@ class CubiCasa21M(nn.Module):
         self.r43_a = Residual(256, 256)
 
         ###     OLD ARCHITECTURE      ###
+        
         # self.r44_a = Residual(256, 512)
         # self.r45_a = Residual(512, 512)
 
         ###    NEW ARCHITECTURE      ###
+
         self.maxpool5 = nn.MaxPool2d(kernel_size=2, stride=2) # Output: (B, 256, H/128, W/128)
         self.r51_a = Residual(256, 256)
         self.r52_a = Residual(256, 256)
@@ -56,6 +58,7 @@ class CubiCasa21M(nn.Module):
         self.r52_b = Residual(256, 256)
         self.r53_b = Residual(256, 512)
         self.r5_   = Residual(512, 512)
+
         ###   NEW ARCHITECTURE      ###
 
         self.upsample4 = nn.ConvTranspose2d(512, 512, kernel_size=2, stride=2) # Output: (B, 512, H/32, W/32)

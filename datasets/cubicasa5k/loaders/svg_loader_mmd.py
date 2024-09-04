@@ -11,6 +11,9 @@ import multiprocessing
 from functools import partial
 import os
 
+############################
+## ADJUSTED FROM CUBICASA ##
+############################
 
 class FloorplanSVGMMD(Dataset):
     def __init__(self, source_list, target_list, cfg, is_transform=True, augmentations=None, img_norm=True, pre_load=False):

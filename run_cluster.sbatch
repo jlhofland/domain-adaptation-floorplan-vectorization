@@ -1,14 +1,15 @@
 #!/bin/bash
 
-# DEFINE SBATCH VARIABLES
+# DEFINE SBATCH VARIABLES (for 175G data folder)
 #SBATCH --partition=general
-#SBATCH --qos=medium
-#SBATCH --time=1-10:00:00
+#SBATCH --qos=long
+#SBATCH --time=3-00:00:00
 #SBATCH --ntasks=1
-#SBATCH --cpus-per-task=32
-#SBATCH --mem=64G
+#SBATCH --cpus-per-task=8
+#SBATCH --mem=32G
 #SBATCH --mail-type=ALL
-#SBATCH --gres=gpu
+#SBATCH --gres=gpu:a40:1
+#SBATCH --tmp=500G
 
 # Measure GPU usage of your job (initialization)
 previous=$(/usr/bin/nvidia-smi --query-accounted-apps='gpu_utilization,mem_utilization,max_memory_usage,time' --format='csv' | /usr/bin/tail -n '+2') 
@@ -23,11 +24,12 @@ module load miniconda/3.9
 module load cuda/12.4 cudnn/12-8.9.1.23
 
 # CREATE LOCAL MEMORY FOLDER
-tmpdir="/dev/shm/${USER}/${SLURM_JOBID}"
-mkdir --parents "$tmpdir"
+tmpdir="/tmp/${USER}/${SLURM_JOBID}"
+mkdir -p "$tmpdir/run"
 
 # TEMP FOLDER PRINT
 echo "Temporary folder: $(hostname --short):${tmpdir}"
+echo "Run folder: $(hostname --short):${tmpdir}/run"
 
 # DEFINE DATA DIRECTORY
 datadir="/tudelft.net/staff-umbrella/StudentsCVlab/${USER}/"
@@ -42,13 +44,23 @@ function clean_up {
 trap 'clean_up' EXIT 
 
 # COPY DATA FROM $datadir TO $tmpdir/
-rsync -av --exclude='.conda' "$datadir" "$tmpdir"/
+# OLD: rsync -av --exclude='.conda' "$datadir" "$tmpdir"/
+rsync -av \
+  --exclude='.conda' \
+  --include='F1_original.png' \
+  --include='F1_scaled.png' \
+  --include='model.svg' \
+  --include='*.txt' \
+  --include='*/' \
+  --exclude='*' \
+  "$datadir" "$tmpdir"/
 
 # ACTIVATE CONDA ENVIRONMENT
 conda activate fp-vector
 
 # EXPORT WANDB_API_KEY
-export WANDB_API_KEY="2a609c086839dc7fbac9d210a9b81c6b748f5994"
+export WANDB_API_KEY="REPLACE_WITH_API_KEY" # EDIT THIS LINE
+export WANDB_DATA_DIR=$tmpdir
 
 # For multi-GPU, don't use P2P as it hangs
 export NCCL_P2P_DISABLE=1
@@ -57,7 +69,7 @@ export NCCL_P2P_DISABLE=1
 python --version
 
 # RUN FILE
-srun python train.py dataset.files.root=$tmpdir/ dataset.num_workers=32
+srun python train.py dataset.files.root=$tmpdir/ wandb.dir=$tmpdir/run dataset.num_workers=4 wandb.experiment_name=FULL_P20_PRM_400E train.precision="medium"
 
 # Measure GPU usage of your job (result)
 /usr/bin/nvidia-smi --query-accounted-apps='gpu_utilization,mem_utilization,max_memory_usage,time' --format='csv' | /usr/bin/grep -v -F "$previous"

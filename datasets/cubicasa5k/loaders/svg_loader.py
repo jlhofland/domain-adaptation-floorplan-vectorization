@@ -10,6 +10,9 @@ import multiprocessing
 from functools import partial
 import os
 
+############################
+## ADJUSTED FROM CUBICASA ##
+############################
 
 class FloorplanSVG(Dataset):
     def __init__(self, source_list, cfg, target_list=None, is_transform=True, augmentations=None, img_norm=True, pre_load=False):

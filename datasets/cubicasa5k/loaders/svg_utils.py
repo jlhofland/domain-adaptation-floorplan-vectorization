@@ -5,6 +5,9 @@ from skimage.draw import polygon
 from svgpathtools import parse_path
 from logging import warning
 
+############################
+## BORROWED FROM CUBICASA ##
+############################
 
 def get_labels(path, height, width):
     svg = minidom.parse(path)

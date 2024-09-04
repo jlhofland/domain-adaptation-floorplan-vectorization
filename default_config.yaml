@@ -3,9 +3,9 @@ wandb:
   log: True
   dir: /default/
   experiment_name: NONE
-  entity: hofland-jeroen
-  project: cc5k
-  weights: False
+  entity: wandb-entity-name
+  project: project-name
+  weights: False # model-XXXXXX | False
 debugger:
   batches: False # number | False
   profiler: SimpleProfiler # SimpleProfiler | AdvancedProfiler | False
@@ -14,22 +14,23 @@ debugger:
   batch_tuner: False
   anomaly: False
 model:
-  name: CubiCasa # CubiCasaMMD | CubiCasa | False
+  name: CubiCasa 
   input_slice: [21, 12, 11]
-  loss: UncertaintyLoss # UncertaintyLoss | False
-  weights: False # path | False
+  loss: UncertaintyLoss 
+  weights: True # path | False
   watch: False
-  init_weights: True
+  init_weights: True 
 optimizer:
   name: adam
   lr: 0.001
   eps: 1e-08
   betas: [0.9, 0.999]
   patience: 10
+  factor: 0.5
 mmd:
-  enable: True
+  enable: False
   latent_channels: 512 # 512 | 256
-  latent_transformation: nn.AdaptiveMaxPool2d((1, 1)) # nn.AdaptiveMaxPool2d((1, 1)) | nn.AdaptiveMaxPool2d((2, 2)) 
+  latent_transformation: nn.AdaptiveMaxPool2d((1, 1)) # nn.AdaptiveMaxPool2d((1, 1)) | nn.AdaptiveMaxPool2d((2, 2)) | nn.AdaptiveMaxPool2d((4, 4))
   lambda_constant: 0.1
   lambda_variable: False # False | number (higher > steeper)
   lambda_adaptive: False # False | True (learnable)
@@ -37,7 +38,8 @@ train:
   batch_size: 20
   accumulate_grad_batches: 1 # effective batch size = accumulate_grad_batches * batch_size
   resume: False # path | False
-  max_epochs: 100
+  max_epochs: 400
+  precision: medium # highest or medium
   max_time:
     enable: False
     days: 0
@@ -56,12 +58,12 @@ test:
   experiment_variable: Lambda (C)
   experiment_measure: self.cfg.mmd.lambda_constant
   exclude_classes:
-    enable: True
+    enable: False
     rooms: [10] # [10: Garage]
     icons: [8, 9, 10] # [8: Fire Place, 9: Bathtub, 10: Chimney]
 dataset:
   name: cubicasa
-  num_workers: 8 # 10 (local) | 0.5 * cpus (cluster)
+  num_workers: 4 # 0.5 * threads (max)
   format: txt # lmdb or txt
   augmentations: True
   original_size: True
@@ -71,7 +73,7 @@ dataset:
   overwrite: True
   save_samples: True
   load_samples: True
-  scale: True
+  scale: False
   image_size: 256
   val_size: False
   files:

@@ -9,6 +9,9 @@ from datasets.cubicasa5k.loaders.augmentations_mmd import (RandomCropToSizeTorch
 from torchvision.transforms import RandomChoice
 from torch.nn import functional as F
 
+############################
+## ADJUSTED FROM CUBICASA ##
+############################
 
 class CubiCasa5K(pl.LightningDataModule):
     def __init__(self, cfg):

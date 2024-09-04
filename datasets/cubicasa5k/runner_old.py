@@ -6,6 +6,10 @@ from torch import optim
 import wandb
 import math
 
+#############################
+##        DEPRECATED       ##
+#############################
+
 class Runner(pl.LightningModule):
     def __init__(self, cfg, model, loss_fn, labels, *args, **kwargs):
         # Initialize the LightningModule

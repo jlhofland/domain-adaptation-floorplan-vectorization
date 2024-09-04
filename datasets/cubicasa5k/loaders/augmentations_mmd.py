@@ -6,6 +6,10 @@ from datasets.cubicasa5k.loaders import svg_utils
 import cv2
 from typing import Tuple
 
+############################
+## ADJUSTED FROM CUBICASA ##
+############################
+
 # 0. I
 # 1. I top to right
 # 2. I vertical flip
