@@ -1,8 +1,8 @@
-# PyTorch Lightning Example
+# Exploring Domain Adaptation for Floor Plan Vectorization
 
-*Robert-Jan Bruintjes*
+*Jeroen Hofland*
 
-This repository serves as a starting point for any PyTorch-based Deep Computer Vision experiments. It uses PyTorch Lightning to power the training logic (including multi-GPU training), OmegaConf to provide a flexible and reproducible way to set the parameters of experiments, and Weights & Biases to log all experimental results and outputs.
+This research explores the challenges of converting architectural floor plans from raster to vector images. Unlike previous studies, our research focuses on domain adaptation to address stylistic and technical variations across different floor plan datasets. We develop and test our vectorization method on the CubiCasa5K benchmark, which includes 3 different floor plan styles. Our analysis reveals differences in input features across the CubiCasa5K styles, indicating the potential for domain adaptation research, mostly in room segmentation. However, we also find multiple indications that labelling in the CubiCasa5K dataset is ambiguous and inconsistent. Furthermore, styles with more training data do not always perform better, highlighting the complexity differences between floor plan styles. Our baseline shows a 0.7\% gap for rooms yet a 0.6\% improvement for objects, likely caused by the smaller feature gaps and inconsistent labelling. To address the adaptation gap, we add a Multi-Kernel Maximum Mean Discrepancy (MK-MMD) loss to the CubiCasa5K model to minimize feature distribution differences between domains. While our MK-MMD implementation shows potential for reducing the adaptation gap, persistence issues and mixed results across classes make it difficult to draw clear conclusions. Our findings also show the role of balancing spatial context in the MK-MMD calculation. These insights lay a foundation for future domain adaptation research in floor plan vectorization.
 
 ## Installation
 
@@ -15,20 +15,18 @@ CPU: `conda env create -f environment.yml`
 Use command-line arguments to override the defaults given in `config.yaml`. For example:
 
 ```bash
-python train.py wandb.log=True wandb.entity=<wandb-username> wandb.project=<wandb-project> wandb.experiment_name=<name-in-wandb> dataset.name=MNIST dataset.data_dir=./data dataset.channels=1 dataset.classes=10 model.name=LeNet
+python train.py dataset.name=cubicasa
 ```
 
-**HPC**: to run on the HPC, copy your code to the HPC, adapt the given `run.sbatch` to your HPC settings (see the top of the file) and use it by appending the Python call to the call to the sbatch file:
+## Data experiments
+
+The data experiments can be found in the `paper` folder. We also added two experiments in the main folder called `exp_ambiguity_check.py` and `exp_domain_performance.py`. Archived experiments can be found in the `exp_achive` folder.
+
+**HPC**: to run on the HPC/DAIC, copy your code to the HPC/DAIC, adapt the given `run_cluster.sbatch` to your HPC/DAIC settings (see the top of the file) and use it by appending the Python call to the call to the sbatch file:
 
 ```bash
-sbatch --partition general --qos short --time 4:00:00 -J name-in-slurm run.sbatch python train.py wandb.log=True wandb.entity=<wandb-username> wandb.project=<wandb-project> wandb.experiment_name=<name-in-wandb> dataset.name=MNIST dataset.data_dir=./data dataset.channels=1 dataset.classes=10 model.name=LeNet
+sbatch run_cluster.sbatch
 ```
-
-**GPUs**: the code will automatically detect available GPUs and attempt to use them. When multiple GPUs are used each fits `train.batch_size` samples, so the total batch size is `NUM_GPUs * train.batch_size`. Consider this when tuning your hyperparameters!
-
-## Extending
-
-*If you end up extending this code to support generally useful functionality, or widely used datasets and/or models, consider a pull request to share your code!*
 
 ### Adding models
 
@@ -56,15 +54,3 @@ filename = os.path.join(directory, 'model.ckpt')
 
 - Add flag `ckpt_path=filename` to the call to `Trainer.fit()`
 - Consider generalizing this by making `artifact_name` given by a new config key `cfg.resume.artifact`
-
-## Known issues
-
-**Warnings related to `num_workers`**:
-Depending on the amount of CPU threads available you may want to adapt `cfg.dataset.num_workers` for data loading to be more efficient.
-
-**Warnings related to `sync_dist`**:
-PyTorch Lightning recommends to sync logging calls. As far as I know this doesn't affect the reported accuracies, but it may slow down training, so I chose to ignore these warnings.
-
-## Questions
-
-If you have any questions about the use of this code, open an issue on the repository.
